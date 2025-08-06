@@ -160,4 +160,6 @@ class PocketBaseService {
     if (!isLoggedIn) return "Not logged in";
     return "User: ${username ?? 'Unknown'} (ID: ${userId ?? 'Unknown'})";
   }
+
+  getCurrentUserId() {}
 }
