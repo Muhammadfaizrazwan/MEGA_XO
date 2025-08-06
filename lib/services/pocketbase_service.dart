@@ -1,7 +1,10 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:io';
+import 'dart:async';
+import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
 import 'package:pocketbase/pocketbase.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'connection_debug_helper.dart';
 
 class PocketBaseService {
   static final PocketBaseService _instance = PocketBaseService._internal();
@@ -18,7 +21,14 @@ class PocketBaseService {
 
   Future<void> init() async {
     try {
+      if (kDebugMode) {
+        ConnectionDebugHelper.logConnectionInfo();
+        ConnectionDebugHelper.logNetworkCapabilities();
+        await ConnectionDebugHelper.testPocketBaseConnection(pb.baseUrl);
+      }
+
       await _loadAuth();
+      _configureMobileSettings();
 
       pb.authStore.onChange.listen((AuthStoreEvent event) {
         if (event.token.isEmpty) {
@@ -34,6 +44,20 @@ class PocketBaseService {
     }
   }
 
+  void _configureMobileSettings() {
+    if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+      // Configure mobile-specific settings for better SSE connections
+      pb.httpClientFactory = () {
+        final client = HttpClient();
+        client.connectionTimeout = const Duration(seconds: 30);
+        client.idleTimeout = const Duration(seconds: 90);
+        // Disable HTTP/2 for better mobile compatibility
+        client.autoUncompress = true;
+        return client;
+      };
+    }
+  }
+
   Future<void> _testConnection() async {
     try {
       await pb.health.check();
@@ -41,6 +65,84 @@ class PocketBaseService {
     } catch (e) {
       throw Exception("Tidak dapat terhubung ke server PocketBase.");
     }
+  }
+
+  /// Enhanced subscribe method with retry logic for mobile
+  Future<void> subscribeWithRetry(
+    String collection,
+    String recordId,
+    Function(RealtimeSubscriptionEvent) callback, {
+    int maxRetries = 3,
+    Duration retryDelay = const Duration(seconds: 2),
+  }) async {
+    int retryCount = 0;
+    
+    while (retryCount < maxRetries) {
+      try {
+        await pb.collection(collection).subscribe(recordId, callback);
+        print("✅ SSE subscription established successfully for $collection/$recordId");
+        return;
+      } catch (e) {
+        retryCount++;
+        print("❌ SSE subscription failed (attempt $retryCount/$maxRetries): $e");
+        
+        if (retryCount < maxRetries) {
+          print("⏳ Retrying in ${retryDelay.inSeconds} seconds...");
+          await Future.delayed(retryDelay);
+          // Exponential backoff
+          retryDelay = Duration(seconds: retryDelay.inSeconds * 2);
+        } else {
+          print("🚨 All SSE connection attempts failed. Using polling fallback.");
+          throw Exception("Failed to establish SSE connection after $maxRetries attempts: $e");
+        }
+      }
+    }
+  }
+
+  /// Polling fallback for when SSE fails
+  StreamController<Map<String, dynamic>>? _pollingController;
+  Timer? _pollingTimer;
+
+  Stream<Map<String, dynamic>> subscribeWithPollingFallback(
+    String collection,
+    String recordId, {
+    Duration pollingInterval = const Duration(seconds: 2),
+  }) {
+    _pollingController?.close();
+    _pollingTimer?.cancel();
+    
+    _pollingController = StreamController<Map<String, dynamic>>.broadcast();
+    
+    // Try SSE first
+    subscribeWithRetry(collection, recordId, (e) {
+      if (e.action == 'update' && e.record != null) {
+        _pollingController?.add(e.record!.data);
+      }
+    }).catchError((error) {
+      // Fallback to polling
+      print("🔄 Falling back to polling for $collection/$recordId");
+      _startPolling(collection, recordId, pollingInterval);
+    });
+    
+    return _pollingController!.stream;
+  }
+
+  void _startPolling(String collection, String recordId, Duration interval) {
+    _pollingTimer = Timer.periodic(interval, (timer) async {
+      try {
+        final record = await pb.collection(collection).getOne(recordId);
+        _pollingController?.add(record.data);
+      } catch (e) {
+        print("Polling error: $e");
+      }
+    });
+  }
+
+  void stopPolling() {
+    _pollingController?.close();
+    _pollingTimer?.cancel();
+    _pollingController = null;
+    _pollingTimer = null;
   }
 
   Future<void> _loadAuth() async {
