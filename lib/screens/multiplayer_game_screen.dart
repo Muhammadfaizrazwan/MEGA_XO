@@ -186,35 +186,34 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
       // Clean up any existing subscription first
       try {
         await pbService.pb.collection('rooms').unsubscribe(widget.roomId);
+        pbService.stopPolling();
       } catch (e) {
         // Ignore if not subscribed yet
       }
       
-      await pbService.pb.collection('rooms').subscribe(widget.roomId, (e) {
+      // Use improved SSE with polling fallback
+      pbService.subscribeWithPollingFallback('rooms', widget.roomId).listen((data) {
         if (!mounted) {
           print("Widget not mounted, ignoring realtime update");
           return;
         }
         
         print("=== REALTIME UPDATE ===");
-        print("Action: ${e.action}");
+        print("Room data: $data");
         
-        if (e.action == 'update') {
-          final r = e.record;
-          if (r == null) {
-            print("Warning: Received update but record is null");
-            return;
-          }
-          
-          _handleRealtimeUpdate(r.data);
-        }
+        _handleRealtimeUpdate(data);
         print("=== END REALTIME UPDATE ===");
+      }, onError: (error) {
+        print("❌ Realtime subscription error: $error");
+        if (mounted) {
+          _showMessage("Koneksi realtime bermasalah, menggunakan polling", isError: true);
+        }
       });
       
-      print(" Realtime subscription established successfully");
+      print("✅ Realtime subscription with fallback established successfully");
       
     } catch (e) {
-      print(" Error setting up realtime subscription: $e");
+      print("❌ Error setting up realtime subscription: $e");
       if (mounted) {
         _showMessage("Koneksi realtime bermasalah", isError: true);
       }
@@ -561,9 +560,10 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
     print("Disposing multiplayer game screen");
     try {
       pbService.pb.collection('rooms').unsubscribe(widget.roomId);
-      print("Successfully unsubscribed from room: ${widget.roomId}");
+      pbService.stopPolling();
+      print("Successfully cleaned up connections for room: ${widget.roomId}");
     } catch (e) {
-      print("Error unsubscribing: $e");
+      print("Error cleaning up connections: $e");
     }
     super.dispose();
   }

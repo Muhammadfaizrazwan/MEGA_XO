@@ -101,12 +101,13 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
     _fadeController.dispose();
     _scaleController.dispose();
 
-    // Unsubscribe dari realtime jika masih aktif
+    // Cleanup realtime connections
     if (roomId != null) {
       try {
         pbService.pb.collection('rooms').unsubscribe(roomId!);
+        pbService.stopPolling();
       } catch (e) {
-        print("Error unsubscribing: $e");
+        print("Error cleaning up connections: $e");
       }
     }
 
@@ -178,26 +179,28 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
 
     print("Listening for opponent in room: $roomId");
 
-    pbService.pb.collection('rooms').subscribe(roomId!, (e) {
+    // Use improved SSE with polling fallback
+    pbService.subscribeWithPollingFallback('rooms', roomId!).listen((data) {
       if (!mounted) return;
 
-      print("Realtime event: ${e.action}");
+      print("Room data updated: $data");
 
-      if (e.action == 'update') {
-        final r = e.record;
-        print("Room updated: ${r?.data}");
+      if (data['playerO'] != null && data['playerO'] != '') {
+        print("Opponent joined! PlayerO: ${data['playerOName']}");
 
-        if (r?.data['playerO'] != null && r?.data['playerO'] != '') {
-          print("Opponent joined! PlayerO: ${r?.data['playerOName']}");
-
-          // Unsubscribe sebelum navigate
+        // Stop polling and unsubscribe
+        pbService.stopPolling();
+        try {
           pbService.pb.collection('rooms').unsubscribe(roomId!);
+        } catch (e) {
+          print("Error unsubscribing: $e");
+        }
 
-          // Navigate ke game screen
-          Navigator.pushReplacement(
-            context,
-            PageRouteBuilder(
-              pageBuilder: (context, animation, secondaryAnimation) =>
+        // Navigate ke game screen
+        Navigator.pushReplacement(
+          context,
+          PageRouteBuilder(
+            pageBuilder: (context, animation, secondaryAnimation) =>
                   MultiplayerGameScreen(roomId: roomId!, isPlayerX: true),
               transitionsBuilder:
                   (context, animation, secondaryAnimation, child) {
