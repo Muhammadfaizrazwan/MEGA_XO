@@ -19,6 +19,8 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
   String? roomCode;
   String? roomId;
   bool isWaiting = false;
+  bool isInitialized = false;
+  String userDisplayName = "USER";
 
   // Animation controllers
   late AnimationController _pulseController;
@@ -35,17 +37,53 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
   void initState() {
     super.initState();
     _initAnimations();
-    _checkAuth();
+    _initializeService();
   }
 
-  void _checkAuth() {
-    if (!pbService.isLoggedIn) {
-      _showMessage("Kamu harus login dulu", isError: true);
+  void _initializeService() async {
+    try {
+      // Initialize PocketBase service if not already done
+      if (!isInitialized) {
+        await pbService.init();
+        isInitialized = true;
+      }
+
+      // Check authentication status
+      _checkAuth();
+    } catch (e) {
+      print("Error initializing service: $e");
+      _showMessage("Error initializing service: $e", isError: true);
+    }
+  }
+
+  void _checkAuth() async {
+    try {
+      // Check if user is logged in using the updated method
+      final isLoggedIn = await pbService.isUserLoggedIn();
+      
+      if (!isLoggedIn) {
+        _showMessage("Sesi login expired, silakan login ulang", isError: true);
+        Future.delayed(const Duration(seconds: 2), () {
+          if (mounted) {
+            Navigator.pop(context);
+          }
+        });
+        return;
+      }
+
+      // Get user info for display
+      final userInfo = await pbService.getUserInfo();
+      setState(() {
+        userDisplayName = userInfo['name'] ?? userInfo['email'] ?? "Unknown User";
+      });
+
+      print("Current user: ${pbService.getCurrentUserInfo()}");
+    } catch (e) {
+      print("Error checking auth: $e");
+      _showMessage("Error checking authentication: $e", isError: true);
       Future.delayed(const Duration(seconds: 2), () {
         if (mounted) Navigator.pop(context);
       });
-    } else {
-      print("Current user: ${pbService.getCurrentUserInfo()}");
     }
   }
 
@@ -104,7 +142,7 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
     // Unsubscribe dari realtime jika masih aktif
     if (roomId != null) {
       try {
-        pbService.pb.collection('rooms').unsubscribe(roomId!);
+        pbService.pb.then((pb) => pb.collection('rooms').unsubscribe(roomId!));
       } catch (e) {
         print("Error unsubscribing: $e");
       }
@@ -118,8 +156,10 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
     if (isWaiting) return;
 
     try {
-      if (!pbService.isLoggedIn) {
-        throw Exception("Kamu harus login dulu");
+      // Ensure we're authenticated before creating room
+      final isLoggedIn = await pbService.isUserLoggedIn();
+      if (!isLoggedIn) {
+        throw Exception("Sesi login expired, silakan login ulang");
       }
 
       setState(() {
@@ -132,27 +172,26 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
       print("Creating room with code: $code");
       print("Player X (Creator): ${pbService.getCurrentUserInfo()}");
 
-      // Fixed: Initialize with proper Ultimate Tic-Tac-Toe structure
+      // Initialize with proper Ultimate Tic-Tac-Toe structure
       final emptySmallBoards = List.generate(9, (index) => List.filled(9, ''));
       final emptyBigBoard = List.filled(9, '');
 
-      final room = await pbService.pb
-          .collection('rooms')
-          .create(
-            body: {
-              'roomCode': code,
-              'playerX': pbService.userId,
-              'playerXName': pbService.username,
-              'playerO': null,
-              'playerOName': null,
-              'status': 'waiting',
-              'smallBoards': jsonEncode(emptySmallBoards),
-              'bigBoard': jsonEncode(emptyBigBoard),
-              'currentTurn': 'X',
-              'activeBoard': -1,
-              'createdBy': pbService.userId,
-            },
-          );
+      final pb = await pbService.pb;
+      final room = await pb.collection('rooms').create(
+        body: {
+          'roomCode': code,
+          'playerX': pbService.userId,
+          'playerXName': pbService.username ?? userDisplayName,
+          'playerO': null,
+          'playerOName': null,
+          'status': 'waiting',
+          'smallBoards': jsonEncode(emptySmallBoards),
+          'bigBoard': jsonEncode(emptyBigBoard),
+          'currentTurn': 'X',
+          'activeBoard': -1,
+          'createdBy': pbService.userId,
+        },
+      );
 
       roomCode = code;
       roomId = room.id;
@@ -168,54 +207,60 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
       setState(() {
         isWaiting = false;
       });
-      _showMessage("Gagal membuat room: $e", isError: true);
+      _showMessage("Gagal membuat room: ${e.toString().replaceFirst('Exception: ', '')}", isError: true);
     }
   }
 
   /// Tunggu lawan join (Realtime)
-  void _listenForOpponent() {
+  void _listenForOpponent() async {
     if (roomId == null) return;
 
     print("Listening for opponent in room: $roomId");
 
-    pbService.pb.collection('rooms').subscribe(roomId!, (e) {
-      if (!mounted) return;
+    try {
+      final pb = await pbService.pb;
+      pb.collection('rooms').subscribe(roomId!, (e) {
+        if (!mounted) return;
 
-      print("Realtime event: ${e.action}");
+        print("Realtime event: ${e.action}");
 
-      if (e.action == 'update') {
-        final r = e.record;
-        print("Room updated: ${r?.data}");
+        if (e.action == 'update') {
+          final r = e.record;
+          print("Room updated: ${r?.data}");
 
-        if (r?.data['playerO'] != null && r?.data['playerO'] != '') {
-          print("Opponent joined! PlayerO: ${r?.data['playerOName']}");
+          if (r?.data['playerO'] != null && r?.data['playerO'] != '') {
+            print("Opponent joined! PlayerO: ${r?.data['playerOName']}");
 
-          // Unsubscribe sebelum navigate
-          pbService.pb.collection('rooms').unsubscribe(roomId!);
+            // Unsubscribe sebelum navigate
+            pb.collection('rooms').unsubscribe(roomId!);
 
-          // Navigate ke game screen
-          Navigator.pushReplacement(
-            context,
-            PageRouteBuilder(
-              pageBuilder: (context, animation, secondaryAnimation) =>
-                  MultiplayerGameScreen(roomId: roomId!, isPlayerX: true),
-              transitionsBuilder:
-                  (context, animation, secondaryAnimation, child) {
-                    return SlideTransition(
-                      position: animation.drive(
-                        Tween(
-                          begin: const Offset(1.0, 0.0),
-                          end: Offset.zero,
-                        ).chain(CurveTween(curve: Curves.easeInOut)),
-                      ),
-                      child: child,
-                    );
-                  },
-            ),
-          );
+            // Navigate ke game screen
+            Navigator.pushReplacement(
+              context,
+              PageRouteBuilder(
+                pageBuilder: (context, animation, secondaryAnimation) =>
+                    MultiplayerGameScreen(roomId: roomId!, isPlayerX: true),
+                transitionsBuilder:
+                    (context, animation, secondaryAnimation, child) {
+                      return SlideTransition(
+                        position: animation.drive(
+                          Tween(
+                            begin: const Offset(1.0, 0.0),
+                            end: Offset.zero,
+                          ).chain(CurveTween(curve: Curves.easeInOut)),
+                        ),
+                        child: child,
+                      );
+                    },
+              ),
+            );
+          }
         }
-      }
-    });
+      });
+    } catch (e) {
+      print("Error listening for opponent: $e");
+      _showMessage("Error listening for opponent: $e", isError: true);
+    }
   }
 
   /// Join room berdasarkan roomCode
@@ -223,8 +268,10 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
     if (isWaiting) return;
 
     try {
-      if (!pbService.isLoggedIn) {
-        throw Exception("Kamu harus login dulu");
+      // Ensure we're authenticated before joining room
+      final isLoggedIn = await pbService.isUserLoggedIn();
+      if (!isLoggedIn) {
+        throw Exception("Sesi login expired, silakan login ulang");
       }
 
       // Validasi kode minimal 4 digit, maksimal 6
@@ -239,28 +286,23 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
       print("Trying to join room with code: $code");
       print("Player O (Joiner): ${pbService.getCurrentUserInfo()}");
 
-      // Fixed: Use proper filter syntax
+      // Use proper filter syntax
       final filterQuery = "roomCode='$code' && status='waiting'";
 
       print("Filter query: $filterQuery");
 
+      final pb = await pbService.pb;
       // Cari room berdasarkan roomCode dan status waiting
-      final rooms = await pbService.pb
-          .collection('rooms')
-          .getList(filter: filterQuery, perPage: 1);
+      final rooms = await pb.collection('rooms').getList(filter: filterQuery, perPage: 1);
 
       print("Rooms found: ${rooms.items.length}");
 
       if (rooms.items.isEmpty) {
         // Coba cari room dengan kode yang sama tapi status berbeda
-        print(
-          "No waiting rooms found, checking for any rooms with this code...",
-        );
+        print("No waiting rooms found, checking for any rooms with this code...");
 
         final allRoomsQuery = "roomCode='$code'";
-        final allRooms = await pbService.pb
-            .collection('rooms')
-            .getList(filter: allRoomsQuery, perPage: 1);
+        final allRooms = await pb.collection('rooms').getList(filter: allRoomsQuery, perPage: 1);
 
         if (allRooms.items.isEmpty) {
           throw Exception("Room dengan kode $code tidak ditemukan");
@@ -275,9 +317,7 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
             case 'finished':
               throw Exception("Room sudah selesai");
             default:
-              throw Exception(
-                "Room tidak dalam status waiting (status: $status)",
-              );
+              throw Exception("Room tidak dalam status waiting (status: $status)");
           }
         }
       }
@@ -299,16 +339,14 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
       print("Joining room: ${room.id}");
 
       // Update room dengan playerO
-      await pbService.pb
-          .collection('rooms')
-          .update(
-            room.id,
-            body: {
-              'playerO': pbService.userId,
-              'playerOName': pbService.username,
-              'status': 'playing',
-            },
-          );
+      await pb.collection('rooms').update(
+        room.id,
+        body: {
+          'playerO': pbService.userId,
+          'playerOName': pbService.username ?? userDisplayName,
+          'status': 'playing',
+        },
+      );
 
       print("Successfully joined room");
 
@@ -397,15 +435,20 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
     }
   }
 
-  void _cancelWaiting() {
+  void _cancelWaiting() async {
     if (roomId != null) {
-      // Delete room yang sedang menunggu
-      pbService.pb.collection('rooms').delete(roomId!).catchError((e) {
-        print("Error deleting room: $e");
-      });
+      try {
+        // Delete room yang sedang menunggu
+        final pb = await pbService.pb;
+        await pb.collection('rooms').delete(roomId!).catchError((e) {
+          print("Error deleting room: $e");
+        });
 
-      // Unsubscribe
-      pbService.pb.collection('rooms').unsubscribe(roomId!);
+        // Unsubscribe
+        pb.collection('rooms').unsubscribe(roomId!);
+      } catch (e) {
+        print("Error canceling room: $e");
+      }
     }
 
     setState(() {
@@ -781,7 +824,7 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: Text(
-                                  pbService.getCurrentUserInfo(),
+                                  "Welcome $userDisplayName",
                                   style: TextStyle(
                                     fontSize: 12,
                                     color: Colors.white.withOpacity(0.8),
@@ -991,8 +1034,7 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
                                 builder: (context, value, child) {
                                   final canJoin =
                                       !isWaiting &&
-                                      value.text.trim().length >=
-                                          4; 
+                                      value.text.trim().length >= 4; 
 
                                   return AnimatedContainer(
                                     duration: const Duration(milliseconds: 200),
@@ -1128,7 +1170,6 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
 
   @override
   Widget build(BuildContext context) {
-    
     if (roomCode != null && isWaiting) {
       return _buildWaitingScreen();
     }

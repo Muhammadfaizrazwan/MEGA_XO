@@ -16,7 +16,8 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
   String currentPlayer = "X";
   int? activeBigRow;
   int? activeBigCol;
-  bool gameEnded = false; // Add game state flag
+  bool gameEnded = false;
+  String? gameResult;
 
   // Timer variables
   Timer? _gameTimer;
@@ -41,17 +42,43 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    _initializeGame();
+    _initAnimations();
+    _startGameTimer();
+    _startTurnTimer();
+  }
+
+  void _initializeGame() {
     board = List.generate(
       3,
       (_) => List.generate(3, (_) => List.generate(9, (_) => "")),
     );
-
-    // Initialize bigBoardStatus
     bigBoardStatus = List.generate(3, (_) => List.generate(3, (_) => ""));
+    currentPlayer = "X";
+    activeBigRow = null;
+    activeBigCol = null;
+    gameEnded = false;
+    gameResult = null;
+    _totalSeconds = 0;
+    _botThinking = false;
+  }
 
-    _initAnimations();
+  void _restartGame() {
+    setState(() {
+      _initializeGame();
+    });
+
+    // Cancel and restart timers
+    _gameTimer?.cancel();
+    _turnTimer?.cancel();
     _startGameTimer();
     _startTurnTimer();
+
+    // Reset animations
+    _turnIndicatorController.reset();
+    _turnIndicatorController.forward();
+    _timerController.reset();
+    _botThinkingController.reset();
   }
 
   void _initAnimations() {
@@ -127,17 +154,17 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
   }
 
   void _handleTimeOut() {
-    // Auto pass turn when player times out
-    setState(() {
-      currentPlayer = "O";
-    });
-    _startTurnTimer();
-    _turnIndicatorController.reset();
-    _turnIndicatorController.forward();
-    _timerController.reset();
+    if (!gameEnded) {
+      setState(() {
+        currentPlayer = "O";
+      });
+      _startTurnTimer();
+      _turnIndicatorController.reset();
+      _turnIndicatorController.forward();
+      _timerController.reset();
 
-    // Bot makes move
-    Future.delayed(const Duration(milliseconds: 500), _botMove);
+      Future.delayed(const Duration(milliseconds: 500), _botMove);
+    }
   }
 
   // Method to check mini board win
@@ -175,10 +202,10 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
 
     // Check if board is full (tie)
     if (miniBoard.every((cell) => cell != "")) {
-      return "T"; // Tie
+      return "T";
     }
 
-    return ""; // No winner yet
+    return "";
   }
 
   // Method to check big board win
@@ -231,14 +258,19 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
     }
 
     if (isFull) {
-      return "T"; // Tie
+      return "T";
     }
 
-    return ""; // No winner yet
+    return "";
   }
 
   // Method to show game end dialog
   void _showGameEndDialog(String winner) {
+    setState(() {
+      gameEnded = true;
+      gameResult = winner;
+    });
+
     String title, message;
     Color color;
 
@@ -289,29 +321,55 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
             ],
           ),
           actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                Navigator.of(context).pop(); // Kembali ke menu utama
-              },
-              child: Text(
-                'Menu Utama',
-                style: TextStyle(color: Colors.grey[300]),
-              ),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                _restartGame();
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: color,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                Expanded(
+                  child: TextButton(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      _restartGame();
+                    },
+                    style: TextButton.styleFrom(
+                      backgroundColor: color,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: const Text(
+                      'Main Lagi',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
                 ),
-              ),
-              child: const Text('Main Lagi'),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextButton(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      Navigator.of(context).pop();
+                    },
+                    style: TextButton.styleFrom(
+                      backgroundColor: Colors.grey[600],
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: const Text(
+                      'Menu Utama',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         );
@@ -319,46 +377,17 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
     );
   }
 
-  // Method to restart game
-  void _restartGame() {
-    setState(() {
-      board = List.generate(
-        3,
-        (_) => List.generate(3, (_) => List.generate(9, (_) => "")),
-      );
-      bigBoardStatus = List.generate(3, (_) => List.generate(3, (_) => ""));
-      currentPlayer = "X";
-      activeBigRow = null;
-      activeBigCol = null;
-      _totalSeconds = 0;
-      _botThinking = false;
-      gameEnded = false;
-    });
-
-    _gameTimer?.cancel();
-    _turnTimer?.cancel();
-    _startGameTimer();
-    _startTurnTimer();
-    _turnIndicatorController.reset();
-    _turnIndicatorController.forward();
-    _timerController.reset();
-    _botThinkingController.reset();
-  }
-
   void _handleMove(int bigRow, int bigCol, int smallRow, int smallCol) {
-    if (_botThinking || gameEnded)
-      return; // Prevent moves during bot thinking or after game ends
+    if (_botThinking || gameEnded) return;
 
     setState(() {
       board[bigRow][bigCol][smallRow * 3 + smallCol] = currentPlayer;
 
-      // Check if mini board is won
       bigBoardStatus[bigRow][bigCol] = _checkMiniBoard(board[bigRow][bigCol]);
 
       activeBigRow = smallRow;
       activeBigCol = smallCol;
 
-      // If the target board is already won or full, player can choose any board
       if (bigBoardStatus[activeBigRow!][activeBigCol!] != "" ||
           board[activeBigRow!][activeBigCol!].every((c) => c.isNotEmpty)) {
         activeBigRow = null;
@@ -366,12 +395,8 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
       }
     });
 
-    // Check if big board has a winner
     String bigBoardWinner = _checkBigBoard();
     if (bigBoardWinner != "") {
-      setState(() {
-        gameEnded = true;
-      });
       _gameTimer?.cancel();
       _turnTimer?.cancel();
       _stopBotThinking();
@@ -385,17 +410,15 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
       currentPlayer = currentPlayer == "X" ? "O" : "X";
     });
 
-    // Restart turn timer and animations
     _startTurnTimer();
     _turnIndicatorController.reset();
     _turnIndicatorController.forward();
     _timerController.reset();
 
-    // If bot's turn
     if (currentPlayer == "O" && !gameEnded) {
       _startBotThinking();
       Future.delayed(
-        Duration(milliseconds: 1000 + Random().nextInt(1500)),
+        Duration(milliseconds: 1500 + Random().nextInt(1000)),
         _botMove,
       );
     }
@@ -415,18 +438,61 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
     _botThinkingController.reset();
   }
 
+  // IMPROVED BOT AI - HARD DIFFICULTY
   void _botMove() {
     if (!mounted || gameEnded) return;
 
-    final rand = Random();
+    Map<String, int>? bestMove = _getBestMove();
+    
+    if (bestMove == null) {
+      _stopBotThinking();
+      return;
+    }
+
+    _stopBotThinking();
+    _handleMove(
+      bestMove["bigRow"]!,
+      bestMove["bigCol"]!,
+      bestMove["smallRow"]!,
+      bestMove["smallCol"]!,
+    );
+  }
+
+  Map<String, int>? _getBestMove() {
+    List<Map<String, int>> availableMoves = _getAvailableMoves();
+    if (availableMoves.isEmpty) return null;
+
+    // 1. Try to win the big board
+    Map<String, int>? winMove = _findBigBoardWinMove(availableMoves);
+    if (winMove != null) return winMove;
+
+    // 2. Block player from winning big board
+    Map<String, int>? blockMove = _findBigBoardBlockMove(availableMoves);
+    if (blockMove != null) return blockMove;
+
+    // 3. Try to win a mini board
+    Map<String, int>? miniWinMove = _findMiniBoardWinMove(availableMoves);
+    if (miniWinMove != null) return miniWinMove;
+
+    // 4. Block player from winning mini board
+    Map<String, int>? miniBlockMove = _findMiniBoardBlockMove(availableMoves);
+    if (miniBlockMove != null) return miniBlockMove;
+
+    // 5. Strategic positioning
+    Map<String, int>? strategicMove = _findStrategicMove(availableMoves);
+    if (strategicMove != null) return strategicMove;
+
+    // 6. Fallback to best available move
+    return _findBestPositionalMove(availableMoves);
+  }
+
+  List<Map<String, int>> _getAvailableMoves() {
     List<Map<String, int>> availableMoves = [];
 
     for (int bigRow = 0; bigRow < 3; bigRow++) {
       for (int bigCol = 0; bigCol < 3; bigCol++) {
-        // Skip if this big board is already won
         if (bigBoardStatus[bigRow][bigCol] != "") continue;
 
-        // Skip if we must play in a specific board and this isn't it
         if (activeBigRow != null &&
             (bigRow != activeBigRow || bigCol != activeBigCol))
           continue;
@@ -444,19 +510,188 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
       }
     }
 
-    if (availableMoves.isEmpty) {
-      _stopBotThinking();
-      return;
+    return availableMoves;
+  }
+
+  // Check if bot can win big board with this move
+  Map<String, int>? _findBigBoardWinMove(List<Map<String, int>> moves) {
+    for (var move in moves) {
+      // Simulate the move
+      List<List<String>> tempBigBoard = List.generate(
+        3, (i) => List.generate(3, (j) => bigBoardStatus[i][j])
+      );
+      
+      List<String> tempMiniBoard = List.from(board[move["bigRow"]!][move["bigCol"]!]);
+      tempMiniBoard[move["smallRow"]! * 3 + move["smallCol"]!] = "O";
+      
+      String miniResult = _checkMiniBoard(tempMiniBoard);
+      if (miniResult == "O") {
+        tempBigBoard[move["bigRow"]!][move["bigCol"]!] = "O";
+        
+        // Check if this wins the big board
+        if (_checkBigBoardWin(tempBigBoard, "O")) {
+          return move;
+        }
+      }
+    }
+    return null;
+  }
+
+  // Check if bot needs to block player from winning big board
+  Map<String, int>? _findBigBoardBlockMove(List<Map<String, int>> moves) {
+    for (var move in moves) {
+      List<List<String>> tempBigBoard = List.generate(
+        3, (i) => List.generate(3, (j) => bigBoardStatus[i][j])
+      );
+      
+      List<String> tempMiniBoard = List.from(board[move["bigRow"]!][move["bigCol"]!]);
+      tempMiniBoard[move["smallRow"]! * 3 + move["smallCol"]!] = "X";
+      
+      String miniResult = _checkMiniBoard(tempMiniBoard);
+      if (miniResult == "X") {
+        tempBigBoard[move["bigRow"]!][move["bigCol"]!] = "X";
+        
+        if (_checkBigBoardWin(tempBigBoard, "X")) {
+          return move;
+        }
+      }
+    }
+    return null;
+  }
+
+  // Try to win a mini board
+  Map<String, int>? _findMiniBoardWinMove(List<Map<String, int>> moves) {
+    for (var move in moves) {
+      List<String> tempMiniBoard = List.from(board[move["bigRow"]!][move["bigCol"]!]);
+      tempMiniBoard[move["smallRow"]! * 3 + move["smallCol"]!] = "O";
+      
+      if (_checkMiniBoard(tempMiniBoard) == "O") {
+        return move;
+      }
+    }
+    return null;
+  }
+
+  // Block player from winning mini board
+  Map<String, int>? _findMiniBoardBlockMove(List<Map<String, int>> moves) {
+    for (var move in moves) {
+      List<String> tempMiniBoard = List.from(board[move["bigRow"]!][move["bigCol"]!]);
+      tempMiniBoard[move["smallRow"]! * 3 + move["smallCol"]!] = "X";
+      
+      if (_checkMiniBoard(tempMiniBoard) == "X") {
+        return move;
+      }
+    }
+    return null;
+  }
+
+  // Strategic moves (center, corners, avoid sending player to good boards)
+  Map<String, int>? _findStrategicMove(List<Map<String, int>> moves) {
+    List<Map<String, int>> goodMoves = [];
+
+    for (var move in moves) {
+      int score = 0;
+      int smallPos = move["smallRow"]! * 3 + move["smallCol"]!;
+      
+      // Prefer center positions
+      if (smallPos == 4) score += 10;
+      
+      // Prefer corners
+      if ([0, 2, 6, 8].contains(smallPos)) score += 5;
+      
+      // Avoid sending player to advantageous boards
+      int nextBigRow = move["smallRow"]!;
+      int nextBigCol = move["smallCol"]!;
+      
+      if (bigBoardStatus[nextBigRow][nextBigCol] == "" && 
+          !board[nextBigRow][nextBigCol].every((c) => c.isNotEmpty)) {
+        // Check if player could win this board easily
+        int playerAdvantage = _evaluatePlayerAdvantage(nextBigRow, nextBigCol);
+        score -= playerAdvantage * 3;
+      } else {
+        // Sending player to invalid board (good for us)
+        score += 15;
+      }
+
+      if (score > 0) {
+        goodMoves.add({...move, "score": score});
+      }
     }
 
-    final move = availableMoves[rand.nextInt(availableMoves.length)];
-    _stopBotThinking();
-    _handleMove(
-      move["bigRow"]!,
-      move["bigCol"]!,
-      move["smallRow"]!,
-      move["smallCol"]!,
-    );
+    if (goodMoves.isNotEmpty) {
+      goodMoves.sort((a, b) => b["score"]!.compareTo(a["score"]!));
+      return goodMoves.first;
+    }
+
+    return null;
+  }
+
+  int _evaluatePlayerAdvantage(int bigRow, int bigCol) {
+    List<String> miniBoard = board[bigRow][bigCol];
+    int playerCount = 0;
+    int botCount = 0;
+    
+    for (String cell in miniBoard) {
+      if (cell == "X") playerCount++;
+      if (cell == "O") botCount++;
+    }
+    
+    // More player pieces = more advantage for player
+    return playerCount - botCount;
+  }
+
+  // Find best positional move as fallback
+  Map<String, int>? _findBestPositionalMove(List<Map<String, int>> moves) {
+    if (moves.isEmpty) return null;
+
+    // Prioritize center and corner positions
+    List<int> preferredPositions = [4, 0, 2, 6, 8, 1, 3, 5, 7];
+    
+    for (int pos in preferredPositions) {
+      for (var move in moves) {
+        int smallPos = move["smallRow"]! * 3 + move["smallCol"]!;
+        if (smallPos == pos) {
+          return move;
+        }
+      }
+    }
+
+    return moves.first;
+  }
+
+  bool _checkBigBoardWin(List<List<String>> tempBigBoard, String player) {
+    // Check rows
+    for (int i = 0; i < 3; i++) {
+      if (tempBigBoard[i][0] == player &&
+          tempBigBoard[i][1] == player &&
+          tempBigBoard[i][2] == player) {
+        return true;
+      }
+    }
+
+    // Check columns
+    for (int i = 0; i < 3; i++) {
+      if (tempBigBoard[0][i] == player &&
+          tempBigBoard[1][i] == player &&
+          tempBigBoard[2][i] == player) {
+        return true;
+      }
+    }
+
+    // Check diagonals
+    if (tempBigBoard[0][0] == player &&
+        tempBigBoard[1][1] == player &&
+        tempBigBoard[2][2] == player) {
+      return true;
+    }
+
+    if (tempBigBoard[0][2] == player &&
+        tempBigBoard[1][1] == player &&
+        tempBigBoard[2][0] == player) {
+      return true;
+    }
+
+    return false;
   }
 
   String _formatTime(int seconds) {
@@ -476,7 +711,6 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
         ),
         boxShadow: [
           BoxShadow(
-            // ignore: deprecated_member_use
             color: Colors.deepPurple.withOpacity(0.3),
             blurRadius: 10,
             offset: const Offset(0, 4),
@@ -485,9 +719,7 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
       ),
       child: Row(
         children: [
-          // Back Button
           Material(
-            // ignore: deprecated_member_use
             color: Colors.white.withOpacity(0.2),
             borderRadius: BorderRadius.circular(12),
             child: InkWell(
@@ -505,7 +737,6 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
           ),
           const SizedBox(width: 16),
 
-          // Game Timer
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -529,15 +760,52 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
                   ],
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  'Player vs Bot',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
+                Row(
+                  children: [
+                    Text(
+                      'Player vs Bot',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withOpacity(0.8),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Text(
+                        'HARD',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
+            ),
+          ),
+          // Restart button
+          Material(
+            color: Colors.white.withOpacity(0.2),
+            borderRadius: BorderRadius.circular(12),
+            child: InkWell(
+              onTap: _showRestartDialog,
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                child: const Icon(
+                  Icons.refresh,
+                  color: Colors.white,
+                  size: 24,
+                ),
+              ),
             ),
           ),
         ],
@@ -581,7 +849,6 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
             ),
             child: Column(
               children: [
-                // Avatar with bot thinking animation
                 AnimatedBuilder(
                   animation: _botThinkingAnimation,
                   builder: (context, child) {
@@ -599,7 +866,7 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
                         alignment: Alignment.center,
                         children: [
                           Icon(
-                            isBot ? Icons.smart_toy : Icons.person,
+                            isBot ? Icons.psychology : Icons.person,
                             color: Colors.white,
                             size: 30,
                           ),
@@ -625,7 +892,6 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
                   },
                 ),
                 const SizedBox(height: 12),
-                // Player Name
                 Text(
                   name,
                   style: const TextStyle(
@@ -634,10 +900,28 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
                     color: Colors.white,
                   ),
                 ),
+                if (isBot) ...[
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withOpacity(0.3),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Text(
+                      'HARD AI',
+                      style: TextStyle(
+                        fontSize: 8,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
                 if (isBot && _botThinking) ...[
                   const SizedBox(height: 4),
                   Text(
-                    'Thinking...',
+                    'Analyzing...',
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w400,
@@ -646,7 +930,6 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
                   ),
                 ],
                 const SizedBox(height: 8),
-                // Player Symbol
                 Container(
                   width: 30,
                   height: 30,
@@ -690,7 +973,7 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
                     _buildPlayerCard("X", "You", false, currentPlayer == "X"),
-                    _buildPlayerCard("O", "Bot", true, currentPlayer == "O"),
+                    _buildPlayerCard("O", "Hard Bot", true, currentPlayer == "O"),
                   ],
                 ),
                 const SizedBox(height: 16),
@@ -717,9 +1000,10 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
                           children: [
                             Text(
                               gameEnded
-                                  ? "Game Selesai!"
+                                  ? (gameResult == "X" ? "🎉 You Win!" : 
+                                     gameResult == "O" ? "😔 Bot Wins!" : "🤝 Draw!")
                                   : _botThinking
-                                  ? "Bot is thinking..."
+                                  ? "Bot is analyzing..."
                                   : currentPlayer == "X"
                                   ? "Your Turn"
                                   : "Bot's Turn",
@@ -732,7 +1016,7 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
                             const SizedBox(height: 2),
                             Text(
                               gameEnded
-                                  ? 'Permainan telah berakhir'
+                                  ? 'Game sudah berakhir'
                                   : activeBigRow != null && activeBigCol != null
                                   ? 'Must play in board ${activeBigRow! + 1}-${activeBigCol! + 1}'
                                   : 'Free to choose any board',
@@ -761,7 +1045,6 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
                                 ),
                                 decoration: BoxDecoration(
                                   color: _turnSeconds <= 10
-                                      // ignore: deprecated_member_use
                                       ? Colors.red.withOpacity(0.3)
                                       : Colors.white.withOpacity(0.2),
                                   borderRadius: BorderRadius.circular(8),
@@ -799,6 +1082,49 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
               ],
             ),
           ),
+        );
+      },
+    );
+  }
+
+  void _showRestartDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF2D1B69),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Text(
+            'Restart Game?',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+          ),
+          content: const Text(
+            'Game akan dimulai dari awal. Progress saat ini akan hilang.',
+            style: TextStyle(color: Colors.white70),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text('Batal', style: TextStyle(color: Colors.grey[300])),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _restartGame();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF4ECDC4),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: const Text('Restart'),
+            ),
+          ],
         );
       },
     );
@@ -883,11 +1209,9 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
                 child: Container(
                   margin: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    // ignore: deprecated_member_use
                     color: Colors.white.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
-                      // ignore: deprecated_member_use
                       color: Colors.white.withOpacity(0.2),
                       width: 1,
                     ),

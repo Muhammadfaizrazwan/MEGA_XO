@@ -1,9 +1,39 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:math';
 import 'pvp_screen.dart';
 import 'pve_screen.dart';
 import 'multiplayer_room_screen.dart';
 import 'rules_screen.dart';
+import 'login_screen.dart';
+import 'profile_screen.dart'; // Import profile screen
+import 'package:audioplayers/audioplayers.dart'; // Import audioplayers
+
+// Background Music Class
+class BackgroundMusic {
+  final player = AudioPlayer();
+
+  Future<void> playLoop() async {
+    await player.setReleaseMode(ReleaseMode.loop);
+    await player.play(AssetSource('audio/backsound.mp3'));
+  }
+
+  Future<void> stop() async {
+    await player.stop();
+  }
+
+  Future<void> setVolume(double volume) async {
+    await player.setVolume(volume);
+  }
+
+  Future<void> pause() async {
+    await player.pause();
+  }
+
+  Future<void> resume() async {
+    await player.resume();
+  }
+}
 
 class MainMenuScreen extends StatefulWidget {
   const MainMenuScreen({super.key});
@@ -13,7 +43,7 @@ class MainMenuScreen extends StatefulWidget {
 }
 
 class _MainMenuScreenState extends State<MainMenuScreen>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   late AnimationController _logoController;
   late AnimationController _buttonController;
   late AnimationController _backgroundController;
@@ -27,9 +57,20 @@ class _MainMenuScreenState extends State<MainMenuScreen>
   late Animation<double> _particleAnimation;
   late Animation<double> _waveAnimation;
 
+  String _userEmail = '';
+  String _userName = '';
+  
+  // Background Music
+  final BackgroundMusic _backgroundMusic = BackgroundMusic();
+  bool _isMusicEnabled = true;
+  bool _isMusicPlaying = false;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _loadUserInfo();
+    _loadMusicSettings();
 
     // Logo animation controller
     _logoController = AnimationController(
@@ -98,10 +139,96 @@ class _MainMenuScreenState extends State<MainMenuScreen>
     _backgroundController.repeat();
     _particleController.repeat();
     _waveController.repeat();
+
+    // Start background music
+    _startBackgroundMusic();
+  }
+
+  // Load music settings from SharedPreferences
+  Future<void> _loadMusicSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _isMusicEnabled = prefs.getBool('musicEnabled') ?? true;
+    });
+  }
+
+  // Save music settings to SharedPreferences
+  Future<void> _saveMusicSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('musicEnabled', _isMusicEnabled);
+  }
+
+  // Start background music
+  Future<void> _startBackgroundMusic() async {
+    if (_isMusicEnabled && !_isMusicPlaying) {
+      try {
+        await _backgroundMusic.playLoop();
+        await _backgroundMusic.setVolume(0.3); // Set volume to 30%
+        setState(() {
+          _isMusicPlaying = true;
+        });
+      } catch (e) {
+        print('Error playing background music: $e');
+      }
+    }
+  }
+
+  // Toggle music on/off
+  Future<void> _toggleMusic(bool enabled) async {
+    setState(() {
+      _isMusicEnabled = enabled;
+    });
+
+    if (_isMusicEnabled) {
+      await _startBackgroundMusic();
+    } else {
+      await _backgroundMusic.stop();
+      setState(() {
+        _isMusicPlaying = false;
+      });
+    }
+
+    await _saveMusicSettings();
+  }
+
+  // Handle app lifecycle changes
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    
+    switch (state) {
+      case AppLifecycleState.paused:
+      case AppLifecycleState.inactive:
+        if (_isMusicPlaying) {
+          _backgroundMusic.pause();
+        }
+        break;
+      case AppLifecycleState.resumed:
+        if (_isMusicEnabled && _isMusicPlaying) {
+          _backgroundMusic.resume();
+        }
+        break;
+      case AppLifecycleState.detached:
+        _backgroundMusic.stop();
+        break;
+      case AppLifecycleState.hidden:
+        // Handle hidden state if needed
+        break;
+    }
+  }
+
+  Future<void> _loadUserInfo() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _userEmail = prefs.getString('userEmail') ?? '';
+      _userName = prefs.getString('userName') ?? '';
+    });
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _backgroundMusic.stop(); // Stop music when disposing
     _logoController.dispose();
     _buttonController.dispose();
     _backgroundController.dispose();
@@ -122,6 +249,79 @@ class _MainMenuScreenState extends State<MainMenuScreen>
           size: Size.infinite,
         );
       },
+    );
+  }
+
+  Widget _buildProfileButton() {
+    return Container(
+      margin: const EdgeInsets.only(top: 20, left: 20, right: 20),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.3),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.1),
+                width: 1,
+              ),
+            ),
+            child: IconButton(
+              onPressed: () async {
+                // Stop music before navigating to profile
+                if (_isMusicPlaying) {
+                  await _backgroundMusic.pause();
+                }
+                
+                final result = await Navigator.push(
+                  context,
+                  PageRouteBuilder(
+                    pageBuilder: (context, animation, secondaryAnimation) => ProfileScreen(
+                      isMusicEnabled: _isMusicEnabled,
+                      onMusicToggle: _toggleMusic,
+                    ),
+                    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                      return SlideTransition(
+                        position: animation.drive(
+                          Tween(
+                            begin: const Offset(1.0, 0.0),
+                            end: Offset.zero,
+                          ).chain(CurveTween(curve: Curves.easeInOut)),
+                        ),
+                        child: child,
+                      );
+                    },
+                  ),
+                );
+                
+                // Resume music when coming back from profile if needed
+                if (_isMusicEnabled && _isMusicPlaying && mounted) {
+                  await _backgroundMusic.resume();
+                }
+                
+                // Check if user logged out
+                if (result == 'logout') {
+                  // User logged out from profile screen
+                  return;
+                }
+              },
+              icon: const Icon(
+                Icons.person_outline,
+                color: Colors.white,
+                size: 24,
+              ),
+              style: IconButton.styleFrom(
+                backgroundColor: Colors.transparent,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              tooltip: 'Profile',
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -374,124 +574,134 @@ class _MainMenuScreenState extends State<MainMenuScreen>
             
             // Main content
             SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 32),
-                child: Column(
-                  children: [
-                    const SizedBox(height: 60),
-                    _buildLogo(),
-                    Expanded(
-                      child: Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            _buildAnimatedButton(
-                              context,
-                              "PvP (Offline)",
-                              Icons.people,
-                              () {
-                                Navigator.push(
-                                  context,
-                                  PageRouteBuilder(
-                                    pageBuilder: (context, animation, secondaryAnimation) => const PvPScreen(),
-                                    transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                                      return SlideTransition(
-                                        position: animation.drive(
-                                          Tween(
-                                            begin: const Offset(1.0, 0.0),
-                                            end: Offset.zero,
-                                          ).chain(CurveTween(curve: Curves.easeInOut)),
+              child: Column(
+                children: [
+                  // Profile button only
+                  _buildProfileButton(),
+                  
+                  // Main content with logo and buttons
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 32),
+                      child: Column(
+                        children: [
+                          const SizedBox(height: 40),
+                          _buildLogo(),
+                          Expanded(
+                            child: Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  _buildAnimatedButton(
+                                    context,
+                                    "PvP (Offline)",
+                                    Icons.people,
+                                    () {
+                                      Navigator.push(
+                                        context,
+                                        PageRouteBuilder(
+                                          pageBuilder: (context, animation, secondaryAnimation) => const PvPScreen(),
+                                          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                                            return SlideTransition(
+                                              position: animation.drive(
+                                                Tween(
+                                                  begin: const Offset(1.0, 0.0),
+                                                  end: Offset.zero,
+                                                ).chain(CurveTween(curve: Curves.easeInOut)),
+                                              ),
+                                              child: child,
+                                            );
+                                          },
                                         ),
-                                        child: child,
                                       );
                                     },
+                                    0,
                                   ),
-                                );
-                              },
-                              0,
-                            ),
-                            _buildAnimatedButton(
-                              context,
-                              "PvE (Lawan Bot)",
-                              Icons.smart_toy,
-                              () {
-                                Navigator.push(
-                                  context,
-                                  PageRouteBuilder(
-                                    pageBuilder: (context, animation, secondaryAnimation) => const PvEScreen(),
-                                    transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                                      return SlideTransition(
-                                        position: animation.drive(
-                                          Tween(
-                                            begin: const Offset(1.0, 0.0),
-                                            end: Offset.zero,
-                                          ).chain(CurveTween(curve: Curves.easeInOut)),
+                                  _buildAnimatedButton(
+                                    context,
+                                    "PvE (Lawan Bot)",
+                                    Icons.smart_toy,
+                                    () {
+                                      Navigator.push(
+                                        context,
+                                        PageRouteBuilder(
+                                          pageBuilder: (context, animation, secondaryAnimation) => const PvEScreen(),
+                                          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                                            return SlideTransition(
+                                              position: animation.drive(
+                                                Tween(
+                                                  begin: const Offset(1.0, 0.0),
+                                                  end: Offset.zero,
+                                                ).chain(CurveTween(curve: Curves.easeInOut)),
+                                              ),
+                                              child: child,
+                                            );
+                                          },
                                         ),
-                                        child: child,
                                       );
                                     },
+                                    1,
                                   ),
-                                );
-                              },
-                              1,
-                            ),
-                            _buildAnimatedButton(
-                              context,
-                              "Multiplayer (Online)",
-                              Icons.wifi,
-                              () {
-                                Navigator.push(
-                                  context,
-                                  PageRouteBuilder(
-                                    pageBuilder: (context, animation, secondaryAnimation) => const MultiplayerRoomScreen(),
-                                    transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                                      return SlideTransition(
-                                        position: animation.drive(
-                                          Tween(
-                                            begin: const Offset(1.0, 0.0),
-                                            end: Offset.zero,
-                                          ).chain(CurveTween(curve: Curves.easeInOut)),
+                                  _buildAnimatedButton(
+                                    context,
+                                    "Multiplayer (Online)",
+                                    Icons.wifi,
+                                    () {
+                                      Navigator.push(
+                                        context,
+                                        PageRouteBuilder(
+                                          pageBuilder: (context, animation, secondaryAnimation) => const MultiplayerRoomScreen(),
+                                          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                                            return SlideTransition(
+                                              position: animation.drive(
+                                                Tween(
+                                                  begin: const Offset(1.0, 0.0),
+                                                  end: Offset.zero,
+                                                ).chain(CurveTween(curve: Curves.easeInOut)),
+                                              ),
+                                              child: child,
+                                            );
+                                          },
                                         ),
-                                        child: child,
                                       );
                                     },
+                                    2,
                                   ),
-                                );
-                              },
-                              2,
-                            ),
-                            _buildAnimatedButton(
-                              context,
-                              "Rules",
-                              Icons.help_outline,
-                              () {
-                                Navigator.push(
-                                  context,
-                                  PageRouteBuilder(
-                                    pageBuilder: (context, animation, secondaryAnimation) => const RulesScreen(),
-                                    transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                                      return SlideTransition(
-                                        position: animation.drive(
-                                          Tween(
-                                            begin: const Offset(1.0, 0.0),
-                                            end: Offset.zero,
-                                          ).chain(CurveTween(curve: Curves.easeInOut)),
+                                  _buildAnimatedButton(
+                                    context,
+                                    "Rules",
+                                    Icons.help_outline,
+                                    () {
+                                      Navigator.push(
+                                        context,
+                                        PageRouteBuilder(
+                                          pageBuilder: (context, animation, secondaryAnimation) => const RulesScreen(),
+                                          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                                            return SlideTransition(
+                                              position: animation.drive(
+                                                Tween(
+                                                  begin: const Offset(1.0, 0.0),
+                                                  end: Offset.zero,
+                                                ).chain(CurveTween(curve: Curves.easeInOut)),
+                                              ),
+                                              child: child,
+                                            );
+                                          },
                                         ),
-                                        child: child,
                                       );
                                     },
+                                    3,
                                   ),
-                                );
-                              },
-                              3,
+                                ],
+                              ),
                             ),
-                          ],
-                        ),
+                          ),
+                          const SizedBox(height: 40),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 40),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ],

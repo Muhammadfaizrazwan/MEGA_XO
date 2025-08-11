@@ -33,10 +33,20 @@ class _PvPScreenState extends State<PvPScreen> with TickerProviderStateMixin {
   late Animation<double> _timerWarningAnimation;
   late Animation<double> _pulseAnimation;
 
+  // Game state tracking
+  bool _gameEnded = false;
+  String? _gameResult;
+
   @override
   void initState() {
     super.initState();
+    _initializeGame();
+    _initAnimations();
+    _startGameTimer();
+    _startTurnTimer();
+  }
 
+  void _initializeGame() {
     board = List.generate(
       3,
       (_) => List.generate(3, (_) => List.generate(9, (_) => "")),
@@ -45,10 +55,27 @@ class _PvPScreenState extends State<PvPScreen> with TickerProviderStateMixin {
 
     activeBigRow = null; // awalnya bebas pilih papan kecil mana saja
     activeBigCol = null;
+    currentPlayer = "X";
+    _totalSeconds = 0;
+    _gameEnded = false;
+    _gameResult = null;
+  }
 
-    _initAnimations();
+  void _restartGame() {
+    setState(() {
+      _initializeGame();
+    });
+    
+    // Reset timers
+    _gameTimer?.cancel();
+    _turnTimer?.cancel();
     _startGameTimer();
     _startTurnTimer();
+    
+    // Reset animations
+    _turnIndicatorController.reset();
+    _turnIndicatorController.forward();
+    _timerController.reset();
   }
 
   void _initAnimations() {
@@ -86,7 +113,7 @@ class _PvPScreenState extends State<PvPScreen> with TickerProviderStateMixin {
 
   void _startGameTimer() {
     _gameTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (mounted) {
+      if (mounted && !_gameEnded) {
         setState(() {
           _totalSeconds++;
         });
@@ -98,7 +125,7 @@ class _PvPScreenState extends State<PvPScreen> with TickerProviderStateMixin {
     _turnSeconds = 30;
     _turnTimer?.cancel();
     _turnTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (mounted) {
+      if (mounted && !_gameEnded) {
         setState(() {
           _turnSeconds--;
           if (_turnSeconds <= 10) {
@@ -113,13 +140,15 @@ class _PvPScreenState extends State<PvPScreen> with TickerProviderStateMixin {
   }
 
   void _handleTimeOut() {
-    setState(() {
-      currentPlayer = currentPlayer == "X" ? "O" : "X";
-    });
-    _startTurnTimer();
-    _turnIndicatorController.reset();
-    _turnIndicatorController.forward();
-    _timerController.reset();
+    if (!_gameEnded) {
+      setState(() {
+        currentPlayer = currentPlayer == "X" ? "O" : "X";
+      });
+      _startTurnTimer();
+      _turnIndicatorController.reset();
+      _turnIndicatorController.forward();
+      _timerController.reset();
+    }
   }
 
   // Cek apakah player menang di papan kecil (list 9 kotak string)
@@ -167,6 +196,11 @@ class _PvPScreenState extends State<PvPScreen> with TickerProviderStateMixin {
   }
 
   void _showGameOverDialog(String message) {
+    setState(() {
+      _gameEnded = true;
+      _gameResult = message;
+    });
+    
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -177,17 +211,71 @@ class _PvPScreenState extends State<PvPScreen> with TickerProviderStateMixin {
           'Game Over',
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
         ),
-        content: Text(
-          message,
-          style: const TextStyle(color: Colors.white70, fontSize: 16),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              message,
+              style: const TextStyle(color: Colors.white70, fontSize: 16),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Total waktu: ${_formatTime(_totalSeconds)}',
+              style: const TextStyle(color: Colors.white60, fontSize: 14),
+            ),
+          ],
         ),
         actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              Navigator.of(context).pop();
-            },
-            child: const Text('OK', style: TextStyle(color: Colors.white)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              Expanded(
+                child: TextButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    _restartGame();
+                  },
+                  style: TextButton.styleFrom(
+                    backgroundColor: const Color(0xFF4ECDC4),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: const Text(
+                    'Play Again',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    Navigator.of(context).pop();
+                  },
+                  style: TextButton.styleFrom(
+                    backgroundColor: Colors.grey[600],
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: const Text(
+                    'Exit',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -195,6 +283,9 @@ class _PvPScreenState extends State<PvPScreen> with TickerProviderStateMixin {
   }
 
   void _handleMove(int bigRow, int bigCol, int smallRow, int smallCol) {
+    // Jangan izinkan move jika game sudah berakhir
+    if (_gameEnded) return;
+    
     // Batasi move jika papan besar sudah dimenangi
     if (bigBoardStatus[bigRow][bigCol].isNotEmpty) return;
     if (board[bigRow][bigCol][smallRow * 3 + smallCol].isNotEmpty) return;
@@ -214,14 +305,17 @@ class _PvPScreenState extends State<PvPScreen> with TickerProviderStateMixin {
 
       // Cek menang papan besar
       if (checkBigBoardWin(bigBoardStatus, currentPlayer)) {
-        _showGameOverDialog('$currentPlayer menang!');
+        String winner = currentPlayer == "X" ? "Player 1" : "Player 2";
+        _showGameOverDialog('🎉 $winner Menang! 🎉');
         _turnTimer?.cancel();
         _gameTimer?.cancel();
+        return;
       } else if (bigBoardStatus.expand((e) => e).every((c) => c.isNotEmpty)) {
         // hasil seri
-        _showGameOverDialog('Permainan seri!');
+        _showGameOverDialog('🤝 Permainan Seri! 🤝');
         _turnTimer?.cancel();
         _gameTimer?.cancel();
+        return;
       }
 
       // Tentukan papan aktif untuk lawan 
@@ -321,6 +415,23 @@ class _PvPScreenState extends State<PvPScreen> with TickerProviderStateMixin {
               ],
             ),
           ),
+          // Restart button
+          Material(
+            color: Colors.white.withOpacity(0.2),
+            borderRadius: BorderRadius.circular(12),
+            child: InkWell(
+              onTap: _showRestartDialog,
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                child: const Icon(
+                  Icons.refresh,
+                  color: Colors.white,
+                  size: 24,
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -331,7 +442,7 @@ class _PvPScreenState extends State<PvPScreen> with TickerProviderStateMixin {
       animation: _pulseAnimation,
       builder: (context, child) {
         return Transform.scale(
-          scale: isActive ? _pulseAnimation.value : 1.0,
+          scale: isActive && !_gameEnded ? _pulseAnimation.value : 1.0,
           child: Container(
             width: 140,
             padding: const EdgeInsets.all(16),
@@ -339,10 +450,10 @@ class _PvPScreenState extends State<PvPScreen> with TickerProviderStateMixin {
               color: const Color(0xFF2D1B69),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: isActive ? Colors.white : Colors.transparent,
+                color: isActive && !_gameEnded ? Colors.white : Colors.transparent,
                 width: 2,
               ),
-              boxShadow: isActive
+              boxShadow: isActive && !_gameEnded
                   ? [
                       BoxShadow(
                         color: Colors.white.withOpacity(0.3),
@@ -447,9 +558,11 @@ class _PvPScreenState extends State<PvPScreen> with TickerProviderStateMixin {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              currentPlayer == "X"
-                                  ? "Player 1's Turn"
-                                  : "Player 2's Turn",
+                              _gameEnded 
+                                  ? (_gameResult ?? "Game Over")
+                                  : (currentPlayer == "X"
+                                      ? "Player 1's Turn"
+                                      : "Player 2's Turn"),
                               style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
@@ -458,9 +571,11 @@ class _PvPScreenState extends State<PvPScreen> with TickerProviderStateMixin {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              activeBigRow != null && activeBigCol != null
-                                  ? 'Must play in board ${activeBigRow! + 1}-${activeBigCol! + 1}'
-                                  : 'Free to choose any board',
+                              _gameEnded 
+                                  ? 'Game sudah berakhir'
+                                  : (activeBigRow != null && activeBigCol != null
+                                      ? 'Must play in board ${activeBigRow! + 1}-${activeBigCol! + 1}'
+                                      : 'Free to choose any board'),
                               style: const TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w400,
@@ -470,57 +585,101 @@ class _PvPScreenState extends State<PvPScreen> with TickerProviderStateMixin {
                           ],
                         ),
                       ),
-                      AnimatedBuilder(
-                        animation: _timerWarningAnimation,
-                        builder: (context, child) {
-                          return Transform.scale(
-                            scale: _turnSeconds <= 10
-                                ? _timerWarningAnimation.value
-                                : 1.0,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 8,
-                              ),
-                              decoration: BoxDecoration(
-                                color: _turnSeconds <= 10
-                                    ? Colors.red.withOpacity(0.3)
-                                    : Colors.white.withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.timer,
-                                    size: 16,
-                                    color: _turnSeconds <= 10
-                                        ? Colors.white
-                                        : Colors.white70,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    '$_turnSeconds',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w700,
+                      if (!_gameEnded)
+                        AnimatedBuilder(
+                          animation: _timerWarningAnimation,
+                          builder: (context, child) {
+                            return Transform.scale(
+                              scale: _turnSeconds <= 10
+                                  ? _timerWarningAnimation.value
+                                  : 1.0,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 8,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: _turnSeconds <= 10
+                                      ? Colors.red.withOpacity(0.3)
+                                      : Colors.white.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.timer,
+                                      size: 16,
                                       color: _turnSeconds <= 10
                                           ? Colors.white
                                           : Colors.white70,
                                     ),
-                                  ),
-                                ],
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '$_turnSeconds',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w700,
+                                        color: _turnSeconds <= 10
+                                            ? Colors.white
+                                            : Colors.white70,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
-                          );
-                        },
-                      ),
+                            );
+                          },
+                        ),
                     ],
                   ),
                 ),
               ],
             ),
           ),
+        );
+      },
+    );
+  }
+
+  void _showRestartDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF2D1B69),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Text(
+            'Restart Game?',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+          ),
+          content: const Text(
+            'Game akan dimulai dari awal. Progress saat ini akan hilang.',
+            style: TextStyle(color: Colors.white70),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text('Batal', style: TextStyle(color: Colors.grey[300])),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _restartGame();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF4ECDC4),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: const Text('Restart'),
+            ),
+          ],
         );
       },
     );

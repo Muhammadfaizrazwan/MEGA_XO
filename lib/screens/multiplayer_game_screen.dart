@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:pocketbase/pocketbase.dart';
 import 'dart:async';
 import '../services/pocketbase_service.dart';
 import '../widgets/ultimate_ttt_board.dart';
@@ -33,6 +34,8 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> with Tick
   String? opponentName;
   bool isGameLoaded = false;
   bool isProcessingMove = false;
+  bool isWaitingRestart = false; // New flag for restart state
+  int gameRound = 1; // Track game rounds
   
   // Timers and animations (similar to PvP)
   Timer? _gameTimer;
@@ -43,13 +46,16 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> with Tick
   late AnimationController _turnIndicatorController;
   late AnimationController _timerController;
   late AnimationController _pulseController;
+  late AnimationController _restartController; // New controller for restart animation
 
   late Animation<double> _turnIndicatorAnimation;
   late Animation<double> _timerWarningAnimation;
   late Animation<double> _pulseAnimation;
+  late Animation<double> _restartAnimation; // New animation for restart button
   
-  // Add subscription management
+  // Fixed subscription management
   bool isSubscribed = false;
+  UnsubscribeFunc? _unsubscribeFunc; // Changed to proper PocketBase unsubscribe function
 
   @override
   void initState() {
@@ -84,6 +90,10 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> with Tick
       duration: const Duration(milliseconds: 1000),
       vsync: this,
     );
+    _restartController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
 
     _turnIndicatorAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
@@ -98,6 +108,10 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> with Tick
 
     _pulseAnimation = Tween<double>(begin: 1.0, end: 1.1).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+
+    _restartAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _restartController, curve: Curves.bounceOut),
     );
 
     _turnIndicatorController.forward();
@@ -267,13 +281,16 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> with Tick
   Future<void> _loadRoomData() async {
     try {
       print("🔄 Loading room data...");
-      final room = await pbService.pb.collection('rooms').getOne(widget.roomId);
+      final pocketbase = await pbService.pb;
+      final room = await pocketbase.collection('rooms').getOne(widget.roomId);
       
       print("=== 📊 LOADING ROOM DATA ===");
       print("Raw smallBoards: ${room.data['smallBoards']}");
       print("Raw bigBoard: ${room.data['bigBoard']}");
       print("Current turn: ${room.data['currentTurn']}");
       print("Active board: ${room.data['activeBoard']}");
+      print("Game round: ${room.data['gameRound'] ?? 1}");
+      print("Waiting restart: ${room.data['waitingRestart'] ?? false}");
       
       // Load small boards state with better parsing
       final newSmallBoards = _parseSmallBoards(room.data['smallBoards']);
@@ -301,6 +318,10 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> with Tick
       } else {
         newOpponentName = room.data['playerXName']?.toString() ?? 'Player X';
       }
+
+      // Load restart state
+      final newIsWaitingRestart = room.data['waitingRestart'] ?? false;
+      final newGameRound = room.data['gameRound'] ?? 1;
       
       // Convert and apply updates to state
       _convertFlatTo3D(newSmallBoards, newBigBoard);
@@ -312,14 +333,25 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> with Tick
         opponentName = newOpponentName;
         isGameLoaded = true;
         isProcessingMove = false; // Reset processing flag
+        isWaitingRestart = newIsWaitingRestart;
+        gameRound = newGameRound;
       });
       
       _checkWinners();
+      
+      // Start restart animation if needed
+      if (isWaitingRestart) {
+        _restartController.forward();
+      } else {
+        _restartController.reset();
+      }
       
       print("=== 📈 PARSED DATA ===");
       print("Current turn: $currentPlayer");
       print("Active board: $activeBigRow, $activeBigCol");
       print("Opponent: $opponentName");
+      print("Game round: $gameRound");
+      print("Waiting restart: $isWaitingRestart");
       print("=================");
       
       print("✅ Game loaded successfully");
@@ -341,32 +373,34 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> with Tick
       print("🔌 Setting up realtime subscription for room: ${widget.roomId}");
       
       // Clean up any existing subscription first
-      try {
-        await pbService.pb.collection('rooms').unsubscribe();
-      } catch (e) {
-        // Ignore if not subscribed yet
-      }
+      await _cleanupRealtime();
       
       // Add small delay to ensure clean state
-      await Future.delayed(Duration(milliseconds: 100));
+      await Future.delayed(const Duration(milliseconds: 100));
       
-      await pbService.pb.collection('rooms').subscribe(widget.roomId, (e) async {
-        if (!mounted) {
-          print("⚠️ Widget not mounted, ignoring realtime update");
-          return;
+      final pocketbase = await pbService.pb;
+      
+      // Fixed: PocketBase subscribe method returns UnsubscribeFunc, not StreamSubscription
+      _unsubscribeFunc = await pocketbase.collection('rooms').subscribe(
+        widget.roomId,
+        (e) async {
+          if (!mounted) {
+            print("⚠️ Widget not mounted, ignoring realtime update");
+            return;
+          }
+          
+          print("=== 📡 REALTIME UPDATE ===");
+          print("Action: ${e.action}");
+          print("Record ID: ${e.record?.id}");
+          
+          if (e.action == 'update' && e.record != null) {
+            // Add small delay to prevent race conditions
+            await Future.delayed(const Duration(milliseconds: 50));
+            _handleRealtimeUpdate(e.record!.data);
+          }
+          print("=== 🔚 END REALTIME UPDATE ===");
         }
-        
-        print("=== 📡 REALTIME UPDATE ===");
-        print("Action: ${e.action}");
-        print("Record ID: ${e.record?.id}");
-        
-        if (e.action == 'update' && e.record != null) {
-          // Add small delay to prevent race conditions
-          await Future.delayed(Duration(milliseconds: 50));
-          _handleRealtimeUpdate(e.record!.data);
-        }
-        print("=== 🔚 END REALTIME UPDATE ===");
-      });
+      );
       
       isSubscribed = true;
       print("✅ Realtime subscription established successfully");
@@ -378,12 +412,29 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> with Tick
       // Retry after delay
       if (mounted) {
         print("🔄 Retrying realtime setup in 2 seconds...");
-        Future.delayed(Duration(seconds: 2), () {
+        Future.delayed(const Duration(seconds: 2), () {
           if (mounted) {
             _setupRealtime();
           }
         });
       }
+    }
+  }
+
+  Future<void> _cleanupRealtime() async {
+    try {
+      if (_unsubscribeFunc != null) {
+        await _unsubscribeFunc!();
+        _unsubscribeFunc = null;
+        print("🧹 Cleaned up previous realtime subscription");
+      }
+      
+      isSubscribed = false;
+    } catch (e) {
+      print("⚠️ Error during realtime cleanup: $e");
+      // Ignore cleanup errors but ensure state is reset
+      _unsubscribeFunc = null;
+      isSubscribed = false;
     }
   }
 
@@ -410,6 +461,10 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> with Tick
         newActiveBigRow = activeBoard ~/ 3;
         newActiveBigCol = activeBoard % 3;
       }
+
+      // Check for restart state changes
+      final newIsWaitingRestart = data['waitingRestart'] ?? false;
+      final newGameRound = data['gameRound'] ?? gameRound;
       
       if (newTurn != currentPlayer) {
         print("🔄 Turn changed from $currentPlayer to $newTurn");
@@ -418,6 +473,16 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> with Tick
       
       if (newActiveBigRow != activeBigRow || newActiveBigCol != activeBigCol) {
         print("🔄 ActiveBoard changed from $activeBigRow,$activeBigCol to $newActiveBigRow,$newActiveBigCol");
+        hasChanges = true;
+      }
+
+      if (newIsWaitingRestart != isWaitingRestart) {
+        print("🔄 Restart state changed from $isWaitingRestart to $newIsWaitingRestart");
+        hasChanges = true;
+      }
+
+      if (newGameRound != gameRound) {
+        print("🔄 Game round changed from $gameRound to $newGameRound");
         hasChanges = true;
       }
       
@@ -445,9 +510,18 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> with Tick
           if (newOpponentName != null) {
             opponentName = newOpponentName;
           }
+          isWaitingRestart = newIsWaitingRestart;
+          gameRound = newGameRound;
           // IMPORTANT: Always reset processing flag on ANY realtime update
           isProcessingMove = false;
         });
+        
+        // Handle restart animation
+        if (isWaitingRestart) {
+          _restartController.forward();
+        } else {
+          _restartController.reset();
+        }
         
         _checkWinners();
         print("✅ UI updated via realtime! Processing flag reset.");
@@ -477,12 +551,12 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> with Tick
     }
   }
 
-  // Cek apakah player menang di papan kecil (list 9 kotak string)
+  // Check if player wins in small board (list of 9 cells)
   bool checkWin(List<String> boardSection, String player) {
     List<List<int>> wins = [
-      [0, 1, 2], [3, 4, 5], [6, 7, 8], // baris
-      [0, 3, 6], [1, 4, 7], [2, 5, 8], // kolom
-      [0, 4, 8], [2, 4, 6], // diagonal
+      [0, 1, 2], [3, 4, 5], [6, 7, 8], // rows
+      [0, 3, 6], [1, 4, 7], [2, 5, 8], // columns
+      [0, 4, 8], [2, 4, 6], // diagonals
     ];
     for (var pat in wins) {
       if (boardSection[pat[0]] == player &&
@@ -494,21 +568,21 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> with Tick
     return false;
   }
 
-  // Cek apakah player menang di papan besar
+  // Check if player wins on the big board
   bool checkBigBoardWin(List<List<String>> bigBoard, String player) {
     for (int i = 0; i < 3; i++) {
-      // baris
+      // rows
       if (bigBoard[i][0] == player &&
           bigBoard[i][1] == player &&
           bigBoard[i][2] == player)
         return true;
-      // kolom
+      // columns
       if (bigBoard[0][i] == player &&
           bigBoard[1][i] == player &&
           bigBoard[2][i] == player)
         return true;
     }
-    // diagonal
+    // diagonals
     if (bigBoard[0][0] == player &&
         bigBoard[1][1] == player &&
         bigBoard[2][2] == player)
@@ -529,7 +603,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> with Tick
         winner = winnerPlayer;
         print("🏆 Winner found: $winner");
         if (mounted) {
-          Future.delayed(Duration(milliseconds: 500), () {
+          Future.delayed(const Duration(milliseconds: 500), () {
             _showGameOverDialog(winner == (widget.isPlayerX ? 'X' : 'O') 
                 ? "🎉 Kamu Menang!" 
                 : "😔 $opponentName Menang!");
@@ -544,7 +618,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> with Tick
       winner = 'Draw';
       print("🤝 Game is a draw");
       if (mounted) {
-        Future.delayed(Duration(milliseconds: 500), () {
+        Future.delayed(const Duration(milliseconds: 500), () {
           _showGameOverDialog("🤝 Permainan seri!");
         });
       }
@@ -553,9 +627,13 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> with Tick
 
   void _handleMove(int bigRow, int bigCol, int smallRow, int smallCol) async {
     // Prevent duplicate moves
-    if (isProcessingMove) {
-      print("⚠️ Move already in progress, ignoring");
-      _showMessage("Sedang memproses move...", isError: true);
+    if (isProcessingMove || isWaitingRestart) {
+      print("⚠️ Move blocked - Processing: $isProcessingMove, Waiting restart: $isWaitingRestart");
+      if (isWaitingRestart) {
+        _showMessage("Game sedang menunggu restart", isError: true);
+      } else {
+        _showMessage("Sedang memproses move...", isError: true);
+      }
       return;
     }
 
@@ -654,11 +732,12 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> with Tick
       print("Move by: ${updateData['lastMoveBy']}");
 
       // Update to server with timeout
-      final updatedRecord = await pbService.pb.collection('rooms').update(
+      final pocketbase = await pbService.pb;
+      final updatedRecord = await pocketbase.collection('rooms').update(
         widget.roomId, 
         body: updateData
       ).timeout(
-        Duration(seconds: 10),
+        const Duration(seconds: 10),
         onTimeout: () {
           throw Exception('Timeout: Server tidak merespons');
         },
@@ -671,7 +750,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> with Tick
       print("⏳ Waiting for realtime confirmation...");
       
       // Add timeout fallback for realtime
-      Future.delayed(Duration(seconds: 5), () {
+      Future.delayed(const Duration(seconds: 5), () {
         if (mounted && isProcessingMove) {
           print("⚠️ Realtime timeout, forcing processing flag reset");
           setState(() {
@@ -720,6 +799,11 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> with Tick
         ),
         margin: const EdgeInsets.all(16),
         duration: Duration(seconds: isError ? 3 : 2),
+        action: isError ? SnackBarAction(
+          label: 'Retry',
+          textColor: Colors.white,
+          onPressed: () => _loadRoomData(),
+        ) : null,
       ),
     );
   }
@@ -731,13 +815,36 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> with Tick
       builder: (_) => AlertDialog(
         backgroundColor: const Color(0xFF2D1B69),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text(
-          'Game Over',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+        title: Row(
+          children: [
+            Icon(
+              winner == 'Draw' ? Icons.handshake : 
+              (winner == (widget.isPlayerX ? 'X' : 'O') ? Icons.celebration : Icons.sentiment_dissatisfied),
+              color: Colors.white,
+              size: 28,
+            ),
+            const SizedBox(width: 12),
+            const Text(
+              'Game Over',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+            ),
+          ],
         ),
-        content: Text(
-          message,
-          style: const TextStyle(color: Colors.white70, fontSize: 16),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              message,
+              style: const TextStyle(color: Colors.white70, fontSize: 16),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Round $gameRound completed!',
+              style: const TextStyle(color: Colors.white54, fontSize: 14),
+              textAlign: TextAlign.center,
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -745,14 +852,90 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> with Tick
               Navigator.of(context).pop();
               Navigator.of(context).pop();
             },
-            child: const Text('OK', style: TextStyle(color: Colors.white)),
+            child: const Text('Leave Game', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _requestRestart();
+            },
+            icon: const Icon(Icons.refresh, color: Colors.white),
+            label: const Text('Play Again', style: TextStyle(color: Colors.white)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF6A0DAD),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
           ),
         ],
       ),
     );
   }
 
-  void _resetGame() async {
+  // Enhanced restart functionality
+  Future<void> _requestRestart() async {
+    if (isProcessingMove || isWaitingRestart) {
+      _showMessage("Restart sudah dalam proses", isError: true);
+      return;
+    }
+
+    setState(() {
+      isProcessingMove = true;
+    });
+
+    try {
+      print("🔄 Requesting game restart...");
+      
+      final myUserId = pbService.getCurrentUserId();
+      final pocketbase = await pbService.pb;
+      
+      // Check current room state
+      final room = await pocketbase.collection('rooms').getOne(widget.roomId);
+      final currentWaitingRestart = room.data['waitingRestart'] ?? false;
+      final restartRequestedBy = room.data['restartRequestedBy'];
+      
+      if (currentWaitingRestart && restartRequestedBy == myUserId) {
+        _showMessage("Kamu sudah meminta restart, tunggu lawan", isError: true);
+        setState(() {
+          isProcessingMove = false;
+        });
+        return;
+      }
+      
+      if (currentWaitingRestart && restartRequestedBy != myUserId) {
+        // Both players agreed, actually restart the game
+        await _performRestart();
+      } else {
+        // First player requesting restart
+        await pocketbase.collection('rooms').update(widget.roomId, body: {
+          'waitingRestart': true,
+          'restartRequestedBy': myUserId,
+          'restartRequestTime': DateTime.now().toIso8601String(),
+        });
+        
+        _showMessage("🎮 Restart diminta! Menunggu ${opponentName}...");
+        
+        setState(() {
+          isWaitingRestart = true;
+          isProcessingMove = false;
+        });
+        
+        _restartController.forward();
+      }
+      
+    } catch (e) {
+      print("❌ Failed to request restart: $e");
+      _showMessage("Gagal meminta restart", isError: true);
+      
+      setState(() {
+        isProcessingMove = false;
+        isWaitingRestart = false;
+      });
+    }
+  }
+
+  Future<void> _acceptRestart() async {
     if (isProcessingMove) return;
     
     setState(() {
@@ -760,35 +943,103 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> with Tick
     });
 
     try {
-      final emptySmallBoards = List.generate(9, (index) => List.filled(9, ''));
-      final emptyBigBoard = List.filled(9, '');
-      
-      await pbService.pb.collection('rooms').update(widget.roomId, body: {
-        'smallBoards': jsonEncode(emptySmallBoards),
-        'bigBoard': jsonEncode(emptyBigBoard),
-        'currentTurn': 'X',
-        'activeBoard': -1,
-        'winner': null,
-        'lastMove': DateTime.now().toIso8601String(),
-      });
-      
-      // Reset local state
-      setState(() {
-        winner = null;
-        _totalSeconds = 0;
-      });
-      
-      _showMessage("🔄 Game direset!");
-      
+      await _performRestart();
     } catch (e) {
-      print("❌ Gagal reset game: $e");
-      _showMessage("Gagal reset game", isError: true);
+      print("❌ Failed to accept restart: $e");
+      _showMessage("Gagal menerima restart", isError: true);
       
       setState(() {
         isProcessingMove = false;
       });
     }
   }
+
+  Future<void> _rejectRestart() async {
+    if (isProcessingMove) return;
+
+    setState(() {
+      isProcessingMove = true;
+    });
+
+    try {
+      final pocketbase = await pbService.pb;
+      await pocketbase.collection('rooms').update(widget.roomId, body: {
+        'waitingRestart': false,
+        'restartRequestedBy': null,
+        'restartRequestTime': null,
+      });
+      
+      _showMessage("Restart ditolak");
+      
+      setState(() {
+        isWaitingRestart = false;
+        isProcessingMove = false;
+      });
+      
+      _restartController.reset();
+      
+    } catch (e) {
+      print("❌ Failed to reject restart: $e");
+      _showMessage("Gagal menolak restart", isError: true);
+      
+      setState(() {
+        isProcessingMove = false;
+      });
+    }
+  }
+
+  Future<void> _performRestart() async {
+    try {
+      print("🔄 Performing game restart...");
+      
+      final emptySmallBoards = List.generate(9, (index) => List.filled(9, ''));
+      final emptyBigBoard = List.filled(9, '');
+      
+      final pocketbase = await pbService.pb;
+      await pocketbase.collection('rooms').update(widget.roomId, body: {
+        'smallBoards': jsonEncode(emptySmallBoards),
+        'bigBoard': jsonEncode(emptyBigBoard),
+        'currentTurn': 'X',
+        'activeBoard': -1,
+        'winner': null,
+        'waitingRestart': false,
+        'restartRequestedBy': null,
+        'restartRequestTime': null,
+        'gameRound': gameRound + 1,
+        'lastMove': DateTime.now().toIso8601String(),
+        'gameRestartedAt': DateTime.now().toIso8601String(),
+      });
+      
+      // Reset local state
+      setState(() {
+        winner = null;
+        isWaitingRestart = false;
+        isProcessingMove = false;
+        gameRound++;
+        _totalSeconds = 0; // Reset game timer
+      });
+      
+      _restartController.reset();
+      _showMessage("🎮 Game baru dimulai! Round $gameRound");
+      
+      // Restart timers
+      _startGameTimer();
+      _startTurnTimer();
+      
+      print("✅ Game restarted successfully");
+      
+    } catch (e) {
+      print("❌ Failed to perform restart: $e");
+      _showMessage("Gagal restart game", isError: true);
+      
+      setState(() {
+        isProcessingMove = false;
+      });
+    }
+  }
+
+  // Legacy reset method for backward compatibility
+  void _resetGame() => _requestRestart();
 
   String _formatTime(int seconds) {
     int minutes = seconds ~/ 60;
@@ -850,6 +1101,22 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> with Tick
                         color: Colors.white70,
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        'Round $gameRound',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 16),
@@ -1105,6 +1372,10 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> with Tick
       return '🔄 Loading game...';
     }
     
+    if (isWaitingRestart) {
+      return '🔄 Waiting for restart...';
+    }
+    
     if (isProcessingMove) {
       return '⏳ Processing move...';
     }
@@ -1134,12 +1405,118 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> with Tick
     if (!isGameLoaded || isProcessingMove || winner != null) {
       return '';
     }
+
+    if (isWaitingRestart) {
+      return 'One player wants to restart';
+    }
     
     if (activeBigRow != null && activeBigCol != null) {
       return 'Must play in board ${activeBigRow! + 1}-${activeBigCol! + 1}';
     } else {
       return 'Free to choose any board';
     }
+  }
+
+  Widget _buildRestartRequestPanel() {
+    if (!isWaitingRestart) return const SizedBox.shrink();
+    
+    final myUserId = pbService.getCurrentUserId();
+    // Note: We'd need to get restartRequestedBy from the room data
+    // For now, we'll assume if isWaitingRestart is true, someone requested it
+    
+    return AnimatedBuilder(
+      animation: _restartAnimation,
+      builder: (context, child) {
+        return Transform.scale(
+          scale: _restartAnimation.value,
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: const Color(0xFF4CAF50).withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: const Color(0xFF4CAF50).withOpacity(0.3),
+                width: 1,
+              ),
+            ),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.refresh,
+                      color: const Color(0xFF4CAF50),
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Restart Game?',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Someone wants to start a new game. Do you agree?',
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 14,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextButton.icon(
+                        onPressed: isProcessingMove ? null : _rejectRestart,
+                        icon: const Icon(Icons.close, color: Colors.red),
+                        label: const Text(
+                          'Decline',
+                          style: TextStyle(color: Colors.red),
+                        ),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            side: const BorderSide(color: Colors.red),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: isProcessingMove ? null : _acceptRestart,
+                        icon: const Icon(Icons.check, color: Colors.white),
+                        label: const Text(
+                          'Accept',
+                          style: TextStyle(color: Colors.white),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF4CAF50),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   void _showExitDialog() {
@@ -1156,9 +1533,9 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> with Tick
             'Leave Multiplayer Game?',
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
           ),
-          content: const Text(
-            'You will leave the current multiplayer session. Your opponent will be notified.',
-            style: TextStyle(color: Colors.white70),
+          content: Text(
+            'You will leave the current multiplayer session${isWaitingRestart ? ' and cancel the restart request' : ''}. Your opponent will be notified.',
+            style: const TextStyle(color: Colors.white70),
           ),
           actions: [
             TextButton(
@@ -1193,16 +1570,11 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> with Tick
     _turnIndicatorController.dispose();
     _timerController.dispose();
     _pulseController.dispose();
+    _restartController.dispose();
     
-    try {
-      if (isSubscribed) {
-        pbService.pb.collection('rooms').unsubscribe();
-        print("✅ Successfully unsubscribed from realtime");
-        isSubscribed = false;
-      }
-    } catch (e) {
-      print("❌ Error unsubscribing: $e");
-    }
+    // Clean up realtime subscription
+    _cleanupRealtime();
+    
     super.dispose();
   }
 
@@ -1227,6 +1599,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> with Tick
             children: [
               _buildGameHeader(),
               _buildTurnIndicator(),
+              _buildRestartRequestPanel(), // New restart panel
               Expanded(
                 child: Container(
                   margin: const EdgeInsets.all(20),
@@ -1250,25 +1623,78 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> with Tick
                   ),
                 ),
               ),
-              // Add reset button at bottom if game is over
-              if (winner != null && !isProcessingMove)
+              // Enhanced bottom action buttons
+              if (winner != null || isWaitingRestart)
                 Container(
                   margin: const EdgeInsets.only(left: 20, right: 20, bottom: 20),
-                  child: ElevatedButton.icon(
-                    onPressed: _resetGame,
-                    icon: const Icon(Icons.refresh, color: Colors.white),
-                    label: const Text(
-                      'Play Again',
-                      style: TextStyle(color: Colors.white, fontSize: 16),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF6A0DAD),
-                      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      elevation: 5,
-                    ),
+                  child: Row(
+                    children: [
+                      if (winner != null && !isWaitingRestart)
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: isProcessingMove ? null : _requestRestart,
+                            icon: isProcessingMove 
+                                ? SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white70),
+                                    ),
+                                  )
+                                : const Icon(Icons.refresh, color: Colors.white),
+                            label: Text(
+                              isProcessingMove ? 'Requesting...' : 'Play Again',
+                              style: const TextStyle(color: Colors.white, fontSize: 16),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF6A0DAD),
+                              disabledBackgroundColor: const Color(0xFF6A0DAD).withOpacity(0.6),
+                              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              elevation: 5,
+                            ),
+                          ),
+                        ),
+                      if (isWaitingRestart && winner != null)
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            decoration: BoxDecoration(
+                              color: Colors.orange.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: Colors.orange.withOpacity(0.5),
+                                width: 1,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.orange),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                const Text(
+                                  'Waiting for opponent...',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
             ],

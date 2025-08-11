@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/pocketbase_service.dart';
 import 'main_menu_screen.dart';
-import 'register_screen.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -10,12 +10,8 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen>
-    with TickerProviderStateMixin {
-  final emailCtrl = TextEditingController();
-  final passCtrl = TextEditingController();
+class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin {
   final pbService = PocketBaseService();
-  bool _obscurePassword = true;
   bool _isLoading = false;
 
   // Animation controllers
@@ -36,6 +32,7 @@ class _LoginScreenState extends State<LoginScreen>
     super.initState();
     _initAnimations();
     _startAnimations();
+    _checkIfAlreadyLoggedIn();
   }
 
   void _initAnimations() {
@@ -95,7 +92,66 @@ class _LoginScreenState extends State<LoginScreen>
     });
   }
 
-  Future<void> _login() async {
+  Future<void> _checkIfAlreadyLoggedIn() async {
+    try {
+      // Initialize PocketBase service first
+      await pbService.init();
+      
+      // Check if user is already authenticated
+      final isAuthenticated = await pbService.isUserLoggedIn();
+      
+      if (isAuthenticated && mounted) {
+        // Get user info for welcome message
+        final userInfo = await pbService.getUserInfo();
+        final userName = userInfo['name'] ?? 'User';
+        
+        // User is already logged in, navigate to main menu
+        Navigator.pushReplacement(
+          context,
+          PageRouteBuilder(
+            pageBuilder: (context, animation, secondaryAnimation) =>
+                const MainMenuScreen(),
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              return FadeTransition(
+                opacity: animation,
+                child: child,
+              );
+            },
+          ),
+        );
+        
+        // Show welcome back message
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Row(
+                  children: [
+                    const Icon(Icons.check_circle_outline, color: Colors.white),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text("Welcome back, $userName!")),
+                  ],
+                ),
+                backgroundColor: Colors.green[600],
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                margin: const EdgeInsets.all(16),
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          }
+        });
+      }
+    } catch (e) {
+      // Handle any errors silently or log them
+      print('Error checking authentication status: $e');
+      // If there's an error, just continue to show login screen
+    }
+  }
+
+  Future<void> _loginWithGoogle() async {
     if (_isLoading) return;
 
     setState(() {
@@ -105,28 +161,55 @@ class _LoginScreenState extends State<LoginScreen>
     _loadingController.repeat();
 
     try {
-      await pbService.login(emailCtrl.text, passCtrl.text);
+      final userData = await pbService.loginWithGoogle();
+      
       if (mounted) {
         _loadingController.stop();
-        Navigator.pushReplacement(
-          context,
-          PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) =>
-                const MainMenuScreen(),
-            transitionsBuilder:
-                (context, animation, secondaryAnimation, child) {
-                  return SlideTransition(
-                    position: animation.drive(
-                      Tween(
-                        begin: const Offset(1.0, 0.0),
-                        end: Offset.zero,
-                      ).chain(CurveTween(curve: Curves.easeInOut)),
-                    ),
-                    child: child,
-                  );
-                },
+        
+        // Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle_outline, color: Colors.white),
+                const SizedBox(width: 8),
+                Expanded(child: Text("Welcome, ${userData['name'] ?? 'User'}!")),
+              ],
+            ),
+            backgroundColor: Colors.green[600],
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+            margin: const EdgeInsets.all(16),
+            duration: const Duration(seconds: 1),
           ),
         );
+        
+        // Small delay to show success message
+        await Future.delayed(const Duration(milliseconds: 1200));
+        
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            PageRouteBuilder(
+              pageBuilder: (context, animation, secondaryAnimation) =>
+                  const MainMenuScreen(),
+              transitionsBuilder:
+                  (context, animation, secondaryAnimation, child) {
+                return SlideTransition(
+                  position: animation.drive(
+                    Tween(
+                      begin: const Offset(1.0, 0.0),
+                      end: Offset.zero,
+                    ).chain(CurveTween(curve: Curves.easeInOut)),
+                  ),
+                  child: child,
+                );
+              },
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -141,7 +224,7 @@ class _LoginScreenState extends State<LoginScreen>
               children: [
                 const Icon(Icons.error_outline, color: Colors.white),
                 const SizedBox(width: 8),
-                Expanded(child: Text("Login gagal: ${e.toString()}")),
+                Expanded(child: Text("Google login failed: ${e.toString().replaceFirst('Exception: ', '')}")),
               ],
             ),
             backgroundColor: Colors.red[600],
@@ -156,27 +239,20 @@ class _LoginScreenState extends State<LoginScreen>
     }
   }
 
+  Future<void> _launchURL(String url) async {
+    final Uri uri = Uri.parse(url);
+    if (!await launchUrl(uri)) {
+      throw Exception('Could not launch $url');
+    }
+  }
+
   @override
   void dispose() {
-    emailCtrl.dispose();
-    passCtrl.dispose();
     _titleController.dispose();
     _formController.dispose();
     _backgroundController.dispose();
     _loadingController.dispose();
     super.dispose();
-  }
-
-  Widget _buildBackgroundGradient() {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xFF5800FF), Color(0xFF330066), Color(0xFF1A0033)],
-        ),
-      ),
-    );
   }
 
   Widget _buildFloatingElements() {
@@ -271,7 +347,7 @@ class _LoginScreenState extends State<LoginScreen>
           child: Opacity(
             opacity: _titleOpacityAnimation.value,
             child: Container(
-              margin: const EdgeInsets.only(top: 100),
+              margin: const EdgeInsets.only(top: 80),
               child: Column(
                 children: [
                   Container(
@@ -307,7 +383,7 @@ class _LoginScreenState extends State<LoginScreen>
                     child: const Text(
                       'MEGA',
                       style: TextStyle(
-                        fontSize: 48,
+                        fontSize: 42,
                         fontWeight: FontWeight.w900,
                         color: Colors.white,
                         letterSpacing: 4,
@@ -317,13 +393,13 @@ class _LoginScreenState extends State<LoginScreen>
                   const Text(
                     'X / O',
                     style: TextStyle(
-                      fontSize: 16,
+                      fontSize: 14,
                       fontWeight: FontWeight.w600,
                       color: Colors.white70,
                       letterSpacing: 2,
                     ),
                   ),
-                  const SizedBox(height: 30),
+                  const SizedBox(height: 20),
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 20,
@@ -338,9 +414,9 @@ class _LoginScreenState extends State<LoginScreen>
                       ),
                     ),
                     child: const Text(
-                      'Welcome Back!',
+                      'Welcome Back',
                       style: TextStyle(
-                        fontSize: 18,
+                        fontSize: 16,
                         color: Colors.white,
                         fontWeight: FontWeight.w500,
                       ),
@@ -355,84 +431,20 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String hintText,
-    required IconData icon,
-    bool obscureText = false,
-    VoidCallback? onSuffixIconPressed,
-    IconData? suffixIcon,
-  }) {
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      child: TextField(
-        controller: controller,
-        obscureText: obscureText,
-        style: const TextStyle(color: Colors.white, fontSize: 16),
-        decoration: InputDecoration(
-          hintText: hintText,
-          hintStyle: TextStyle(
-            color: Colors.white.withOpacity(0.6),
-            fontWeight: FontWeight.w400,
-          ),
-          filled: true,
-          fillColor: Colors.white.withOpacity(0.1),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16.0),
-            borderSide: BorderSide(
-              color: Colors.white.withOpacity(0.2),
-              width: 1,
-            ),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16.0),
-            borderSide: BorderSide(
-              color: Colors.white.withOpacity(0.2),
-              width: 1,
-            ),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16.0),
-            borderSide: const BorderSide(color: Color(0xFFFFD700), width: 2),
-          ),
-          contentPadding: const EdgeInsets.symmetric(
-            vertical: 18.0,
-            horizontal: 20.0,
-          ),
-          prefixIcon: Icon(
-            icon,
-            color: Colors.white.withOpacity(0.7),
-            size: 22,
-          ),
-          suffixIcon: suffixIcon != null
-              ? IconButton(
-                  icon: Icon(
-                    suffixIcon,
-                    color: Colors.white.withOpacity(0.7),
-                    size: 22,
-                  ),
-                  onPressed: onSuffixIconPressed,
-                )
-              : null,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLoginButton() {
+  Widget _buildGoogleLoginButton() {
     return Container(
       width: double.infinity,
       height: 56,
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF6A0DAD), Color(0xFF8A2BE2)],
+          colors: [Color(0xFF4285F4), Color(0xFF1976D2)],
           begin: Alignment.centerLeft,
           end: Alignment.centerRight,
         ),
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.deepPurple.withOpacity(0.4),
+            color: Colors.blue.withOpacity(0.4),
             blurRadius: 15,
             spreadRadius: 1,
             offset: const Offset(0, 6),
@@ -442,7 +454,7 @@ class _LoginScreenState extends State<LoginScreen>
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: _isLoading ? null : _login,
+          onTap: _isLoading ? null : _loginWithGoogle,
           borderRadius: BorderRadius.circular(16),
           child: Container(
             alignment: Alignment.center,
@@ -479,14 +491,25 @@ class _LoginScreenState extends State<LoginScreen>
                       );
                     },
                   )
-                : const Text(
-                    'Sign In',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                      letterSpacing: 1,
-                    ),
+                : const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.g_mobiledata,
+                        size: 28,
+                        color: Colors.white,
+                      ),
+                      SizedBox(width: 12),
+                      Text(
+                        'Sign in with Google',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                          letterSpacing: 1,
+                        ),
+                      ),
+                    ],
                   ),
           ),
         ),
@@ -544,76 +567,18 @@ class _LoginScreenState extends State<LoginScreen>
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
-                  _buildTextField(
-                    controller: emailCtrl,
-                    hintText: 'Email Address',
-                    icon: Icons.email_outlined,
-                  ),
-                  _buildTextField(
-                    controller: passCtrl,
-                    hintText: 'Password',
-                    icon: Icons.lock_outline,
-                    obscureText: _obscurePassword,
-                    suffixIcon: _obscurePassword
-                        ? Icons.visibility_outlined
-                        : Icons.visibility_off_outlined,
-                    onSuffixIconPressed: () {
-                      setState(() {
-                        _obscurePassword = !_obscurePassword;
-                      });
-                    },
-                  ),
+                  _buildGoogleLoginButton(),
                   const SizedBox(height: 24),
-                  _buildLoginButton(),
-                  const SizedBox(height: 20),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        'Don\'t have an account? ',
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.7),
-                          fontSize: 14,
-                        ),
+                  TextButton(
+                    onPressed: () => _launchURL('https://megaxo-dev.lightcodedigital.cloud'),
+                    child: Text(
+                      'Privacy Policy',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.7),
+                        decoration: TextDecoration.underline,
+                        fontSize: 14,
                       ),
-                      GestureDetector(
-                        onTap: () => Navigator.push(
-                          context,
-                          PageRouteBuilder(
-                            pageBuilder:
-                                (context, animation, secondaryAnimation) =>
-                                    const RegisterScreen(),
-                            transitionsBuilder:
-                                (
-                                  context,
-                                  animation,
-                                  secondaryAnimation,
-                                  child,
-                                ) {
-                                  return SlideTransition(
-                                    position: animation.drive(
-                                      Tween(
-                                        begin: const Offset(1.0, 0.0),
-                                        end: Offset.zero,
-                                      ).chain(
-                                        CurveTween(curve: Curves.easeInOut),
-                                      ),
-                                    ),
-                                    child: child,
-                                  );
-                                },
-                          ),
-                        ),
-                        child: const Text(
-                          'Sign Up',
-                          style: TextStyle(
-                            color: Color(0xFFFFD700),
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ],
               ),

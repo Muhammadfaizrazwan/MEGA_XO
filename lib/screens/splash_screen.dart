@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../services/pocketbase_service.dart';
 import 'login_screen.dart';
+import 'main_menu_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -10,6 +13,8 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen>
     with TickerProviderStateMixin {
+  final pbService = PocketBaseService();
+  
   late AnimationController _logoController;
   late AnimationController _textController;
   late AnimationController _backgroundController;
@@ -21,6 +26,8 @@ class _SplashScreenState extends State<SplashScreen>
   late Animation<double> _textOpacityAnimation;
   late Animation<double> _backgroundAnimation;
   late Animation<double> _particleAnimation;
+
+  String _statusText = "Initializing...";
 
   @override
   void initState() {
@@ -85,9 +92,92 @@ class _SplashScreenState extends State<SplashScreen>
       _textController.forward();
     });
 
-    // Navigate to login after splash
-    Future.delayed(const Duration(milliseconds: 3500), () {
+    // Initialize and check authentication
+    _initializeAndCheckAuth();
+  }
+
+  Future<void> _initializeAndCheckAuth() async {
+    try {
+      // Update status
+      setState(() {
+        _statusText = "Initializing services...";
+      });
+
+      // Initialize PocketBase service
+      await pbService.init();
+
+      // Update status
+      setState(() {
+        _statusText = "Checking authentication...";
+      });
+
+      // Wait for splash animation
+      await Future.delayed(const Duration(milliseconds: 2500));
+      
+      if (!mounted) return;
+
+      // Check if user is logged in
+      final isLoggedIn = await pbService.isUserLoggedIn();
+      
+      if (isLoggedIn) {
+        // Update status
+        setState(() {
+          _statusText = "Welcome back!";
+        });
+        
+        await Future.delayed(const Duration(milliseconds: 500));
+        
+        if (mounted) {
+          // User is logged in, go to main menu
+          Navigator.pushReplacement(
+            context,
+            PageRouteBuilder(
+              pageBuilder: (context, animation, secondaryAnimation) =>
+                  const MainMenuScreen(),
+              transitionsBuilder:
+                  (context, animation, secondaryAnimation, child) {
+                    return FadeTransition(opacity: animation, child: child);
+                  },
+              transitionDuration: const Duration(milliseconds: 500),
+            ),
+          );
+        }
+      } else {
+        // Update status
+        setState(() {
+          _statusText = "Redirecting to login...";
+        });
+        
+        await Future.delayed(const Duration(milliseconds: 500));
+        
+        if (mounted) {
+          // User is not logged in, go to login screen
+          Navigator.pushReplacement(
+            context,
+            PageRouteBuilder(
+              pageBuilder: (context, animation, secondaryAnimation) =>
+                  const LoginScreen(),
+              transitionsBuilder:
+                  (context, animation, secondaryAnimation, child) {
+                    return FadeTransition(opacity: animation, child: child);
+                  },
+              transitionDuration: const Duration(milliseconds: 500),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print("Error during initialization: $e");
+      
+      // Update status with error
+      setState(() {
+        _statusText = "Connection error, redirecting...";
+      });
+      
+      await Future.delayed(const Duration(milliseconds: 1500));
+      
       if (mounted) {
+        // Error occurred, go to login screen
         Navigator.pushReplacement(
           context,
           PageRouteBuilder(
@@ -101,7 +191,7 @@ class _SplashScreenState extends State<SplashScreen>
           ),
         );
       }
-    });
+    }
   }
 
   @override
@@ -404,13 +494,17 @@ class _SplashScreenState extends State<SplashScreen>
                   ),
                 ),
                 const SizedBox(height: 16),
-                Text(
-                  'Loading...',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.white.withOpacity(0.8),
-                    letterSpacing: 1,
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 300),
+                  child: Text(
+                    _statusText,
+                    key: ValueKey(_statusText),
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.white.withOpacity(0.8),
+                      letterSpacing: 1,
+                    ),
                   ),
                 ),
               ],
