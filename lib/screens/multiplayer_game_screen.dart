@@ -36,6 +36,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> with Tick
   bool isProcessingMove = false;
   bool isWaitingRestart = false; // New flag for restart state
   int gameRound = 1; // Track game rounds
+  bool isGameOverDialogOpen = false; // Track if game over dialog is open
   
   // Timers and animations (similar to PvP)
   Timer? _gameTimer;
@@ -483,6 +484,16 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> with Tick
 
       if (newGameRound != gameRound) {
         print("🔄 Game round changed from $gameRound to $newGameRound");
+        // If game round increased, it means the game was restarted
+        if (newGameRound > gameRound) {
+          print("🎮 Game was restarted, closing any open dialogs...");
+          // Close any open game over dialog
+          if (isGameOverDialogOpen) {
+            print("🔄 Closing game over dialog due to restart...");
+            isGameOverDialogOpen = false;
+            Navigator.of(context).pop();
+          }
+        }
         hasChanges = true;
       }
       
@@ -809,6 +820,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> with Tick
   }
 
   void _showGameOverDialog(String message) {
+    isGameOverDialogOpen = true;
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -849,6 +861,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> with Tick
         actions: [
           TextButton(
             onPressed: () {
+              isGameOverDialogOpen = false;
               Navigator.of(context).pop();
               Navigator.of(context).pop();
             },
@@ -856,6 +869,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> with Tick
           ),
           ElevatedButton.icon(
             onPressed: () {
+              isGameOverDialogOpen = false;
               Navigator.of(context).pop();
               _requestRestart();
             },
@@ -991,6 +1005,13 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> with Tick
   Future<void> _performRestart() async {
     try {
       print("🔄 Performing game restart...");
+      
+      // Close any open game over dialog first
+      if (isGameOverDialogOpen) {
+        print("🔄 Closing game over dialog before restart...");
+        isGameOverDialogOpen = false;
+        Navigator.of(context).pop();
+      }
       
       final emptySmallBoards = List.generate(9, (index) => List.filled(9, ''));
       final emptyBigBoard = List.filled(9, '');

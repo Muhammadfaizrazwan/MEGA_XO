@@ -142,7 +142,9 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
     // Unsubscribe dari realtime jika masih aktif
     if (roomId != null) {
       try {
-        pbService.pb.then((pb) => pb.collection('rooms').unsubscribe(roomId!));
+        pbService.pb.then((pb) => pb.collection('rooms').unsubscribe(roomId!)).catchError((e) {
+          print("Error unsubscribing during dispose: $e");
+        });
       } catch (e) {
         print("Error unsubscribing: $e");
       }
@@ -234,26 +236,31 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
             // Unsubscribe sebelum navigate
             pb.collection('rooms').unsubscribe(roomId!);
 
-            // Navigate ke game screen
-            Navigator.pushReplacement(
-              context,
-              PageRouteBuilder(
-                pageBuilder: (context, animation, secondaryAnimation) =>
-                    MultiplayerGameScreen(roomId: roomId!, isPlayerX: true),
-                transitionsBuilder:
-                    (context, animation, secondaryAnimation, child) {
-                      return SlideTransition(
-                        position: animation.drive(
-                          Tween(
-                            begin: const Offset(1.0, 0.0),
-                            end: Offset.zero,
-                          ).chain(CurveTween(curve: Curves.easeInOut)),
-                        ),
-                        child: child,
-                      );
-                    },
-              ),
-            );
+            // Use a short delay to ensure the subscription cleanup completes
+            Future.delayed(const Duration(milliseconds: 100), () {
+              if (mounted) {
+                // Navigate ke game screen
+                Navigator.pushReplacement(
+                  context,
+                  PageRouteBuilder(
+                    pageBuilder: (context, animation, secondaryAnimation) =>
+                        MultiplayerGameScreen(roomId: roomId!, isPlayerX: true),
+                    transitionsBuilder:
+                        (context, animation, secondaryAnimation, child) {
+                          return SlideTransition(
+                            position: animation.drive(
+                              Tween(
+                                begin: const Offset(1.0, 0.0),
+                                end: Offset.zero,
+                              ).chain(CurveTween(curve: Curves.easeInOut)),
+                            ),
+                            child: child,
+                          );
+                        },
+                  ),
+                );
+              }
+            });
           }
         }
       });
@@ -350,27 +357,31 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
 
       print("Successfully joined room");
 
-      // Navigate ke game screen
+      // Navigate ke game screen with a small delay to ensure state consistency
       if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) =>
-                MultiplayerGameScreen(roomId: room.id, isPlayerX: false),
-            transitionsBuilder:
-                (context, animation, secondaryAnimation, child) {
-                  return SlideTransition(
-                    position: animation.drive(
-                      Tween(
-                        begin: const Offset(1.0, 0.0),
-                        end: Offset.zero,
-                      ).chain(CurveTween(curve: Curves.easeInOut)),
-                    ),
-                    child: child,
-                  );
-                },
-          ),
-        );
+        Future.delayed(const Duration(milliseconds: 50), () {
+          if (mounted) {
+            Navigator.pushReplacement(
+              context,
+              PageRouteBuilder(
+                pageBuilder: (context, animation, secondaryAnimation) =>
+                    MultiplayerGameScreen(roomId: room.id, isPlayerX: false),
+                transitionsBuilder:
+                    (context, animation, secondaryAnimation, child) {
+                      return SlideTransition(
+                        position: animation.drive(
+                          Tween(
+                            begin: const Offset(1.0, 0.0),
+                            end: Offset.zero,
+                          ).chain(CurveTween(curve: Curves.easeInOut)),
+                        ),
+                        child: child,
+                      );
+                    },
+              ),
+            );
+          }
+        });
       }
     } on Exception catch (e) {
       print("Exception joining room: $e");
