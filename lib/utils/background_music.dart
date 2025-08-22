@@ -11,4 +11,6 @@ class BackgroundMusic {
   Future<void> stop() async {
     await player.stop();
   }
+
+  static Future<void> play() async {}
 }

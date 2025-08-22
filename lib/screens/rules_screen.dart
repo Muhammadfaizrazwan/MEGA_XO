@@ -154,7 +154,7 @@ class _RulesScreenState extends State<RulesScreen>
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Mega X/0',
+                  'MEGA_X/O',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,

@@ -10,14 +10,11 @@ class PvPScreen extends StatefulWidget {
 }
 
 class _PvPScreenState extends State<PvPScreen> with TickerProviderStateMixin {
-  late List<List<List<String>>>
-  board; // 3x3 papan besar, tiap elemen 9 kotak kecil
-  late List<List<String>>
-  bigBoardStatus; // status papan besar: "X", "O", atau ""
+  late List<List<List<String>>> board;
+  late List<List<String>> bigBoardStatus;
 
   String currentPlayer = "X";
-  int?
-  activeBigRow; // papan besar aktif row (0..2) atau null = bebas main dimana saja
+  int? activeBigRow;
   int? activeBigCol;
 
   Timer? _gameTimer;
@@ -33,7 +30,6 @@ class _PvPScreenState extends State<PvPScreen> with TickerProviderStateMixin {
   late Animation<double> _timerWarningAnimation;
   late Animation<double> _pulseAnimation;
 
-  // Game state tracking
   bool _gameEnded = false;
   String? _gameResult;
 
@@ -53,7 +49,7 @@ class _PvPScreenState extends State<PvPScreen> with TickerProviderStateMixin {
     );
     bigBoardStatus = List.generate(3, (_) => List.generate(3, (_) => ""));
 
-    activeBigRow = null; // awalnya bebas pilih papan kecil mana saja
+    activeBigRow = null;
     activeBigCol = null;
     currentPlayer = "X";
     _totalSeconds = 0;
@@ -66,13 +62,11 @@ class _PvPScreenState extends State<PvPScreen> with TickerProviderStateMixin {
       _initializeGame();
     });
     
-    // Reset timers
     _gameTimer?.cancel();
     _turnTimer?.cancel();
     _startGameTimer();
     _startTurnTimer();
     
-    // Reset animations
     _turnIndicatorController.reset();
     _turnIndicatorController.forward();
     _timerController.reset();
@@ -151,7 +145,7 @@ class _PvPScreenState extends State<PvPScreen> with TickerProviderStateMixin {
     }
   }
 
-  // Cek apakah player menang di papan kecil (list 9 kotak string)
+  // ✅ FIXED: Cek kemenangan di papan kecil
   bool checkWin(List<String> boardSection, String player) {
     List<List<int>> wins = [
       [0, 1, 2], [3, 4, 5], [6, 7, 8], // baris
@@ -168,7 +162,15 @@ class _PvPScreenState extends State<PvPScreen> with TickerProviderStateMixin {
     return false;
   }
 
-  // Cek apakah player menang di papan besar
+  // ✅ NEW: Cek apakah papan kecil seri/draw
+  bool checkDraw(List<String> boardSection) {
+    // Papan penuh tapi tidak ada yang menang
+    return boardSection.every((cell) => cell.isNotEmpty) && 
+           !checkWin(boardSection, "X") && 
+           !checkWin(boardSection, "O");
+  }
+
+  // ✅ FIXED: Cek kemenangan di papan besar (dengan handling draw)
   bool checkBigBoardWin(List<List<String>> bigBoard, String player) {
     for (int i = 0; i < 3; i++) {
       // baris
@@ -282,11 +284,10 @@ class _PvPScreenState extends State<PvPScreen> with TickerProviderStateMixin {
     );
   }
 
+  // ✅ FIXED: Handle move dengan logic draw yang benar
   void _handleMove(int bigRow, int bigCol, int smallRow, int smallCol) {
-    // Jangan izinkan move jika game sudah berakhir
     if (_gameEnded) return;
     
-    // Batasi move jika papan besar sudah dimenangi
     if (bigBoardStatus[bigRow][bigCol].isNotEmpty) return;
     if (board[bigRow][bigCol][smallRow * 3 + smallCol].isNotEmpty) return;
     if (activeBigRow != null && activeBigCol != null) {
@@ -296,14 +297,19 @@ class _PvPScreenState extends State<PvPScreen> with TickerProviderStateMixin {
     setState(() {
       board[bigRow][bigCol][smallRow * 3 + smallCol] = currentPlayer;
 
-      // Cek menang papan kecil, jika menang, set papan besar dengan simbol pemain
+      // ✅ FIXED: Cek kemenangan DAN draw di papan kecil
       if (checkWin(board[bigRow][bigCol], currentPlayer)) {
+        // Pemain menang di papan kecil
         bigBoardStatus[bigRow][bigCol] = currentPlayer;
-        // Ganti seluruh papan kecil jadi simbol besar pemain
         board[bigRow][bigCol] = List.generate(9, (_) => currentPlayer);
+      } else if (checkDraw(board[bigRow][bigCol])) {
+        // ✅ NEW: Papan kecil seri/draw
+        bigBoardStatus[bigRow][bigCol] = "D"; // D untuk Draw
+        // Tampilkan visual draw di papan kecil
+        board[bigRow][bigCol] = List.generate(9, (_) => "D");
       }
 
-      // Cek menang papan besar
+      // Cek kemenangan papan besar
       if (checkBigBoardWin(bigBoardStatus, currentPlayer)) {
         String winner = currentPlayer == "X" ? "Player 1" : "Player 2";
         _showGameOverDialog('🎉 $winner Menang! 🎉');
@@ -311,7 +317,7 @@ class _PvPScreenState extends State<PvPScreen> with TickerProviderStateMixin {
         _gameTimer?.cancel();
         return;
       } else if (bigBoardStatus.expand((e) => e).every((c) => c.isNotEmpty)) {
-        // hasil seri
+        // ✅ FIXED: Cek seri di papan besar (termasuk yang ada "D")
         _showGameOverDialog('🤝 Permainan Seri! 🤝');
         _turnTimer?.cancel();
         _gameTimer?.cancel();
@@ -322,14 +328,13 @@ class _PvPScreenState extends State<PvPScreen> with TickerProviderStateMixin {
       activeBigRow = smallRow;
       activeBigCol = smallCol;
 
-      // Jika papan aktif sudah dimenangi atau penuh, maka bebas pilih papan manapun
+      // ✅ FIXED: Jika papan aktif sudah dimenangi, draw, atau penuh
       if (bigBoardStatus[activeBigRow!][activeBigCol!].isNotEmpty ||
           board[activeBigRow!][activeBigCol!].every((c) => c.isNotEmpty)) {
         activeBigRow = null;
         activeBigCol = null;
       }
 
-      // Ganti giliran
       currentPlayer = currentPlayer == "X" ? "O" : "X";
     });
 
@@ -415,7 +420,6 @@ class _PvPScreenState extends State<PvPScreen> with TickerProviderStateMixin {
               ],
             ),
           ),
-          // Restart button
           Material(
             color: Colors.white.withOpacity(0.2),
             borderRadius: BorderRadius.circular(12),

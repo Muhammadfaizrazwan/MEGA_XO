@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:math';
 import 'pvp_screen.dart';
-import 'pve_screen.dart';
+import 'difficulty_selection_screen.dart';
 import 'multiplayer_room_screen.dart';
 import 'rules_screen.dart';
 import 'login_screen.dart';
-import 'profile_screen.dart'; // Import profile screen
-import 'package:audioplayers/audioplayers.dart'; // Import audioplayers
+import 'profile_screen.dart';
+import 'package:audioplayers/audioplayers.dart';
 
 // Background Music Class
 class BackgroundMusic {
@@ -64,13 +64,13 @@ class _MainMenuScreenState extends State<MainMenuScreen>
   final BackgroundMusic _backgroundMusic = BackgroundMusic();
   bool _isMusicEnabled = true;
   bool _isMusicPlaying = false;
+  bool _isInitialized = false; // Add this flag to track initialization
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _loadUserInfo();
-    _loadMusicSettings();
+    _initializeApp(); // Change this to a single initialization method
 
     // Logo animation controller
     _logoController = AnimationController(
@@ -139,17 +139,36 @@ class _MainMenuScreenState extends State<MainMenuScreen>
     _backgroundController.repeat();
     _particleController.repeat();
     _waveController.repeat();
+  }
 
-    // Start background music
-    _startBackgroundMusic();
+  // Combined initialization method to ensure proper order
+  Future<void> _initializeApp() async {
+    await _loadUserInfo();
+    await _loadMusicSettings();
+    await _initializeMusic();
+    setState(() {
+      _isInitialized = true;
+    });
+  }
+
+  Future<void> _loadUserInfo() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(() {
+        _userEmail = prefs.getString('userEmail') ?? '';
+        _userName = prefs.getString('userName') ?? '';
+      });
+    }
   }
 
   // Load music settings from SharedPreferences
   Future<void> _loadMusicSettings() async {
     final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _isMusicEnabled = prefs.getBool('musicEnabled') ?? true;
-    });
+    if (mounted) {
+      setState(() {
+        _isMusicEnabled = prefs.getBool('musicEnabled') ?? true;
+      });
+    }
   }
 
   // Save music settings to SharedPreferences
@@ -158,15 +177,30 @@ class _MainMenuScreenState extends State<MainMenuScreen>
     await prefs.setBool('musicEnabled', _isMusicEnabled);
   }
 
+  // Initialize music based on loaded settings
+  Future<void> _initializeMusic() async {
+    if (_isMusicEnabled && !_isMusicPlaying) {
+      await _startBackgroundMusic();
+    } else {
+      // Ensure music is stopped if disabled
+      await _backgroundMusic.stop();
+      setState(() {
+        _isMusicPlaying = false;
+      });
+    }
+  }
+
   // Start background music
   Future<void> _startBackgroundMusic() async {
     if (_isMusicEnabled && !_isMusicPlaying) {
       try {
         await _backgroundMusic.playLoop();
         await _backgroundMusic.setVolume(0.3); // Set volume to 30%
-        setState(() {
-          _isMusicPlaying = true;
-        });
+        if (mounted) {
+          setState(() {
+            _isMusicPlaying = true;
+          });
+        }
       } catch (e) {
         print('Error playing background music: $e');
       }
@@ -196,6 +230,8 @@ class _MainMenuScreenState extends State<MainMenuScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
     
+    if (!_isInitialized) return; // Don't handle lifecycle changes until initialized
+    
     switch (state) {
       case AppLifecycleState.paused:
       case AppLifecycleState.inactive:
@@ -206,6 +242,9 @@ class _MainMenuScreenState extends State<MainMenuScreen>
       case AppLifecycleState.resumed:
         if (_isMusicEnabled && _isMusicPlaying) {
           _backgroundMusic.resume();
+        } else if (_isMusicEnabled && !_isMusicPlaying) {
+          // Restart music if it should be playing but isn't
+          _startBackgroundMusic();
         }
         break;
       case AppLifecycleState.detached:
@@ -215,14 +254,6 @@ class _MainMenuScreenState extends State<MainMenuScreen>
         // Handle hidden state if needed
         break;
     }
-  }
-
-  Future<void> _loadUserInfo() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _userEmail = prefs.getString('userEmail') ?? '';
-      _userName = prefs.getString('userName') ?? '';
-    });
   }
 
   @override
@@ -298,6 +329,9 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                 // Resume music when coming back from profile if needed
                 if (_isMusicEnabled && _isMusicPlaying && mounted) {
                   await _backgroundMusic.resume();
+                } else if (_isMusicEnabled && !_isMusicPlaying && mounted) {
+                  // Restart music if settings changed
+                  await _startBackgroundMusic();
                 }
                 
                 // Check if user logged out
@@ -347,14 +381,12 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                     borderRadius: BorderRadius.circular(25),
                     boxShadow: [
                       BoxShadow(
-                        // ignore: deprecated_member_use
                         color: Colors.orange.withOpacity(0.6),
                         blurRadius: 30,
                         spreadRadius: 5,
                         offset: const Offset(0, 10),
                       ),
                       BoxShadow(
-                        // ignore: deprecated_member_use
                         color: Colors.yellow.withOpacity(0.3),
                         blurRadius: 50,
                         spreadRadius: 10,
@@ -419,14 +451,11 @@ class _MainMenuScreenState extends State<MainMenuScreen>
               child: Material(
                 elevation: 12,
                 borderRadius: BorderRadius.circular(16),
-                // ignore: deprecated_member_use
                 shadowColor: Colors.deepPurple.withOpacity(0.4),
                 child: InkWell(
                   onTap: onPressed,
                   borderRadius: BorderRadius.circular(16),
-                  // ignore: deprecated_member_use
                   splashColor: Colors.white.withOpacity(0.3),
-                  // ignore: deprecated_member_use
                   highlightColor: Colors.white.withOpacity(0.1),
                   child: Container(
                     width: double.infinity,
@@ -434,11 +463,8 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [
-                          // ignore: deprecated_member_use
                           const Color(0xFF6A0DAD).withOpacity(0.95),
-                          // ignore: deprecated_member_use
                           const Color(0xFF8A2BE2).withOpacity(0.95),
-                          // ignore: deprecated_member_use
                           const Color(0xFF9370DB).withOpacity(0.95),
                         ],
                         begin: Alignment.centerLeft,
@@ -446,13 +472,11 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                       ),
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                        // ignore: deprecated_member_use
                         color: Colors.white.withOpacity(0.3),
                         width: 1,
                       ),
                       boxShadow: [
                         BoxShadow(
-                          // ignore: deprecated_member_use
                           color: Colors.purple.withOpacity(0.3),
                           blurRadius: 15,
                           offset: const Offset(0, 5),
@@ -505,7 +529,6 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                   child: Icon(
                     Icons.grid_3x3_outlined,
                     size: size,
-                    // ignore: deprecated_member_use
                     color: Colors.white.withOpacity(opacity),
                   ),
                 ),
@@ -531,9 +554,7 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                     style: TextStyle(
                       fontSize: size,
                       color: isX 
-                        // ignore: deprecated_member_use
                         ? Colors.red.withOpacity(opacity)
-                        // ignore: deprecated_member_use
                         : Colors.green.withOpacity(opacity),
                       fontWeight: FontWeight.bold,
                     ),
@@ -625,7 +646,7 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                                       Navigator.push(
                                         context,
                                         PageRouteBuilder(
-                                          pageBuilder: (context, animation, secondaryAnimation) => const PvEScreen(),
+                                          pageBuilder: (context, animation, secondaryAnimation) => const DifficultySelectionScreen(),
                                           transitionsBuilder: (context, animation, secondaryAnimation, child) {
                                             return SlideTransition(
                                               position: animation.drive(
@@ -745,9 +766,7 @@ class AnimatedBackgroundPainter extends CustomPainter {
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
       colors: [
-        // ignore: deprecated_member_use
         const Color(0xFF6A0DAD).withOpacity(0.3),
-        // ignore: deprecated_member_use
         const Color(0xFF8A2BE2).withOpacity(0.2),
       ],
     ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
@@ -773,9 +792,7 @@ class AnimatedBackgroundPainter extends CustomPainter {
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
       colors: [
-        // ignore: deprecated_member_use
         const Color(0xFF9370DB).withOpacity(0.2),
-        // ignore: deprecated_member_use
         const Color(0xFFBA55D3).withOpacity(0.1),
       ],
     ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
@@ -789,13 +806,11 @@ class AnimatedBackgroundPainter extends CustomPainter {
       double y = (i * 73 + particleAnimation * 80) % size.height;
       double opacity = (sin(particleAnimation * 2 * pi + i) + 1) / 2 * 0.1;
       
-      // ignore: deprecated_member_use
       paint.color = Colors.white.withOpacity(opacity);
       canvas.drawCircle(Offset(x, y), 2, paint);
     }
 
     // Grid pattern overlay
-    // ignore: deprecated_member_use
     paint.color = Colors.white.withOpacity(0.03);
     paint.strokeWidth = 1;
     paint.style = PaintingStyle.stroke;

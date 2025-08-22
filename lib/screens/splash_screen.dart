@@ -447,7 +447,7 @@ class _SplashScreenState extends State<SplashScreen>
                     ),
                   ),
                   child: const Text(
-                    'X / O ',
+                    'X / O',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,

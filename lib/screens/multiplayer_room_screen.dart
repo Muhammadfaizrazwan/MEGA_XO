@@ -21,6 +21,8 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
   bool isWaiting = false;
   bool isInitialized = false;
   String userDisplayName = "USER";
+  bool _hasNavigated = false;
+  
 
   // Animation controllers
   late AnimationController _pulseController;
@@ -151,7 +153,7 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
     super.dispose();
   }
 
-  /// Buat room baru
+  /// Buat room baru - UPDATED dengan field room status
   Future<void> createRoom() async {
     if (isWaiting) return;
 
@@ -190,6 +192,13 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
           'currentTurn': 'X',
           'activeBoard': -1,
           'createdBy': pbService.userId,
+          // ✨ NEW: Initialize room status tracking fields
+          'playerXInRoom': true, // Creator is in room
+          'playerOInRoom': false, // No player O yet
+          'playerXLastSeen': DateTime.now().toIso8601String(),
+          'playerOLastSeen': null, // No player O yet
+          'playerXLeftAt': null, // Not left yet
+          'playerOLeftAt': null, // No player O yet
         },
       );
 
@@ -197,6 +206,10 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
       roomId = room.id;
 
       print("Room created successfully: $roomId");
+      print("✅ Room status fields initialized:");
+      print("- playerXInRoom: true");
+      print("- playerOInRoom: false");
+      print("- playerXLastSeen: ${DateTime.now().toIso8601String()}");
 
       // Dengarkan jika ada playerO join
       _listenForOpponent();
@@ -212,58 +225,67 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
   }
 
   /// Tunggu lawan join (Realtime)
-  void _listenForOpponent() async {
-    if (roomId == null) return;
+void _listenForOpponent() async {
+  if (roomId == null) return;
 
-    print("Listening for opponent in room: $roomId");
+  print("Listening for opponent in room: $roomId");
 
-    try {
-      final pb = await pbService.pb;
-      pb.collection('rooms').subscribe(roomId!, (e) {
-        if (!mounted) return;
+  try {
+    final pb = await pbService.pb;
+    pb.collection('rooms').subscribe(roomId!, (e) {
+      if (!mounted || _hasNavigated) return; // Prevent duplicate navigation
 
-        print("Realtime event: ${e.action}");
+      print("Realtime event: ${e.action}");
 
-        if (e.action == 'update') {
-          final r = e.record;
-          print("Room updated: ${r?.data}");
+      if (e.action == 'update') {
+        final r = e.record;
+        print("Room updated: ${r?.data}");
 
-          if (r?.data['playerO'] != null && r?.data['playerO'] != '') {
-            print("Opponent joined! PlayerO: ${r?.data['playerOName']}");
+        if (r?.data['playerO'] != null && 
+            r?.data['playerO'] != '' && 
+            !_hasNavigated) {
+          print("Opponent joined! PlayerO: ${r?.data['playerOName']}");
+          
+          // Set flag to prevent duplicate navigation
+          _hasNavigated = true;
 
-            // Unsubscribe sebelum navigate
-            pb.collection('rooms').unsubscribe(roomId!);
+          // Unsubscribe before navigate
+          pb.collection('rooms').unsubscribe(roomId!);
 
-            // Navigate ke game screen
-            Navigator.pushReplacement(
-              context,
-              PageRouteBuilder(
-                pageBuilder: (context, animation, secondaryAnimation) =>
-                    MultiplayerGameScreen(roomId: roomId!, isPlayerX: true),
-                transitionsBuilder:
-                    (context, animation, secondaryAnimation, child) {
-                      return SlideTransition(
-                        position: animation.drive(
-                          Tween(
-                            begin: const Offset(1.0, 0.0),
-                            end: Offset.zero,
-                          ).chain(CurveTween(curve: Curves.easeInOut)),
-                        ),
-                        child: child,
-                      );
-                    },
-              ),
-            );
-          }
+          // Use a small delay to ensure state is consistent
+          Future.delayed(const Duration(milliseconds: 100), () {
+            if (mounted) {
+              Navigator.pushReplacement(
+                context,
+                PageRouteBuilder(
+                  pageBuilder: (context, animation, secondaryAnimation) =>
+                      MultiplayerGameScreen(roomId: roomId!, isPlayerX: true),
+                  transitionsBuilder:
+                      (context, animation, secondaryAnimation, child) {
+                        return SlideTransition(
+                          position: animation.drive(
+                            Tween(
+                              begin: const Offset(1.0, 0.0),
+                              end: Offset.zero,
+                            ).chain(CurveTween(curve: Curves.easeInOut)),
+                          ),
+                          child: child,
+                        );
+                      },
+                ),
+              );
+            }
+          });
         }
-      });
-    } catch (e) {
-      print("Error listening for opponent: $e");
-      _showMessage("Error listening for opponent: $e", isError: true);
-    }
+      }
+    });
+  } catch (e) {
+    print("Error listening for opponent: $e");
+    _showMessage("Error listening for opponent: $e", isError: true);
   }
+}
 
-  /// Join room berdasarkan roomCode
+  /// Join room berdasarkan roomCode - UPDATED dengan field room status
   Future<void> joinRoom(String code) async {
     if (isWaiting) return;
 
@@ -338,17 +360,24 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
 
       print("Joining room: ${room.id}");
 
-      // Update room dengan playerO
+      // Update room dengan playerO - UPDATED dengan field room status
       await pb.collection('rooms').update(
         room.id,
         body: {
           'playerO': pbService.userId,
           'playerOName': pbService.username ?? userDisplayName,
           'status': 'playing',
+          // ✨ NEW: Initialize room status for playerO
+          'playerOInRoom': true, // Joiner is now in room
+          'playerOLastSeen': DateTime.now().toIso8601String(),
+          'playerOLeftAt': null, // Not left yet
         },
       );
 
       print("Successfully joined room");
+      print("✅ Player O room status initialized:");
+      print("- playerOInRoom: true");
+      print("- playerOLastSeen: ${DateTime.now().toIso8601String()}");
 
       // Navigate ke game screen
       if (mounted) {
@@ -436,27 +465,31 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
   }
 
   void _cancelWaiting() async {
-    if (roomId != null) {
-      try {
-        // Delete room yang sedang menunggu
-        final pb = await pbService.pb;
-        await pb.collection('rooms').delete(roomId!).catchError((e) {
-          print("Error deleting room: $e");
-        });
+  if (roomId != null) {
+    try {
+      // Set flag to prevent navigation
+      _hasNavigated = true;
+      
+      // Delete room yang sedang menunggu
+      final pb = await pbService.pb;
+      await pb.collection('rooms').delete(roomId!).catchError((e) {
+        print("Error deleting room: $e");
+      });
 
-        // Unsubscribe
-        pb.collection('rooms').unsubscribe(roomId!);
-      } catch (e) {
-        print("Error canceling room: $e");
-      }
+      // Unsubscribe
+      pb.collection('rooms').unsubscribe(roomId!);
+    } catch (e) {
+      print("Error canceling room: $e");
     }
-
-    setState(() {
-      roomCode = null;
-      roomId = null;
-      isWaiting = false;
-    });
   }
+
+  setState(() {
+    roomCode = null;
+    roomId = null;
+    isWaiting = false;
+    _hasNavigated = false; // Reset flag
+  });
+}
 
   Widget _buildFloatingElements() {
     return AnimatedBuilder(
@@ -824,7 +857,7 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: Text(
-                                  "Welcome $userDisplayName",
+                                  "Welcome, $userDisplayName",
                                   style: TextStyle(
                                     fontSize: 12,
                                     color: Colors.white.withOpacity(0.8),

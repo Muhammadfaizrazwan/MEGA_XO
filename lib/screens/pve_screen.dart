@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import '../widgets/ultimate_ttt_board.dart';
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:math';
 
 class PvEScreen extends StatefulWidget {
-  const PvEScreen({super.key});
+  final String difficulty;
+  
+  const PvEScreen({super.key, required this.difficulty});
 
   @override
   State<PvEScreen> createState() => _PvEScreenState();
@@ -27,6 +30,7 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
 
   // Bot status
   bool _botThinking = false;
+  late String botDifficulty;
 
   // Animation controllers
   late AnimationController _turnIndicatorController;
@@ -42,6 +46,7 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    botDifficulty = widget.difficulty;
     _initializeGame();
     _initAnimations();
     _startGameTimer();
@@ -200,9 +205,9 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
       return miniBoard[2];
     }
 
-    // Check if board is full (tie)
+    // Check if board is full (draw)
     if (miniBoard.every((cell) => cell != "")) {
-      return "T";
+      return "D";
     }
 
     return "";
@@ -213,7 +218,7 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
     // Check rows
     for (int i = 0; i < 3; i++) {
       if (bigBoardStatus[i][0] != "" &&
-          bigBoardStatus[i][0] != "T" &&
+          bigBoardStatus[i][0] != "D" &&
           bigBoardStatus[i][0] == bigBoardStatus[i][1] &&
           bigBoardStatus[i][1] == bigBoardStatus[i][2]) {
         return bigBoardStatus[i][0];
@@ -223,7 +228,7 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
     // Check columns
     for (int i = 0; i < 3; i++) {
       if (bigBoardStatus[0][i] != "" &&
-          bigBoardStatus[0][i] != "T" &&
+          bigBoardStatus[0][i] != "D" &&
           bigBoardStatus[0][i] == bigBoardStatus[1][i] &&
           bigBoardStatus[1][i] == bigBoardStatus[2][i]) {
         return bigBoardStatus[0][i];
@@ -232,20 +237,20 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
 
     // Check diagonals
     if (bigBoardStatus[0][0] != "" &&
-        bigBoardStatus[0][0] != "T" &&
+        bigBoardStatus[0][0] != "D" &&
         bigBoardStatus[0][0] == bigBoardStatus[1][1] &&
         bigBoardStatus[1][1] == bigBoardStatus[2][2]) {
       return bigBoardStatus[0][0];
     }
 
     if (bigBoardStatus[0][2] != "" &&
-        bigBoardStatus[0][2] != "T" &&
+        bigBoardStatus[0][2] != "D" &&
         bigBoardStatus[0][2] == bigBoardStatus[1][1] &&
         bigBoardStatus[1][1] == bigBoardStatus[2][0]) {
       return bigBoardStatus[0][2];
     }
 
-    // Check if big board is full (tie)
+    // Check if big board is full (draw)
     bool isFull = true;
     for (int i = 0; i < 3; i++) {
       for (int j = 0; j < 3; j++) {
@@ -258,7 +263,7 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
     }
 
     if (isFull) {
-      return "T";
+      return "D";
     }
 
     return "";
@@ -276,15 +281,15 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
 
     if (winner == "X") {
       title = "🎉 Selamat!";
-      message = "Kamu berhasil mengalahkan Bot!";
+      message = "Kamu berhasil mengalahkan Bot ${botDifficulty.toUpperCase()}!";
       color = Colors.green;
     } else if (winner == "O") {
       title = "😔 Game Over";
-      message = "Bot berhasil mengalahkanmu. Coba lagi!";
+      message = "Bot ${botDifficulty.toUpperCase()} berhasil mengalahkanmu!";
       color = Colors.red;
     } else {
       title = "🤝 Seri!";
-      message = "Permainan berakhir seri. Pertarungan yang sengit!";
+      message = "Pertarungan sengit melawan Bot ${botDifficulty.toUpperCase()}!";
       color = Colors.orange;
     }
 
@@ -383,7 +388,15 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
     setState(() {
       board[bigRow][bigCol][smallRow * 3 + smallCol] = currentPlayer;
 
-      bigBoardStatus[bigRow][bigCol] = _checkMiniBoard(board[bigRow][bigCol]);
+      String miniResult = _checkMiniBoard(board[bigRow][bigCol]);
+      if (miniResult != "") {
+        bigBoardStatus[bigRow][bigCol] = miniResult;
+        if (miniResult == "X" || miniResult == "O") {
+          board[bigRow][bigCol] = List.generate(9, (_) => miniResult);
+        } else if (miniResult == "D") {
+          board[bigRow][bigCol] = List.generate(9, (_) => "D");
+        }
+      }
 
       activeBigRow = smallRow;
       activeBigCol = smallCol;
@@ -417,10 +430,31 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
 
     if (currentPlayer == "O" && !gameEnded) {
       _startBotThinking();
+      
+      // Different thinking times based on difficulty
+      int thinkingTime = _getBotThinkingTime();
+      
       Future.delayed(
-        Duration(milliseconds: 1500 + Random().nextInt(1000)),
+        Duration(milliseconds: thinkingTime),
         _botMove,
       );
+    }
+  }
+
+  int _getBotThinkingTime() {
+    switch (botDifficulty) {
+      case 'easy':
+        return 500 + Random().nextInt(500); // 0.5-1s
+      case 'medium':
+        return 1000 + Random().nextInt(1000); // 1-2s
+      case 'hard':
+        return 1500 + Random().nextInt(1500); // 1.5-3s
+      case 'expert':
+        return 2000 + Random().nextInt(2000); // 2-4s
+      case 'nightmare':
+        return 3000 + Random().nextInt(2000); // 3-5s
+      default:
+        return 1000;
     }
   }
 
@@ -438,11 +472,31 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
     _botThinkingController.reset();
   }
 
-  // IMPROVED BOT AI - HARD DIFFICULTY
+  // BOT AI SYSTEM
   void _botMove() {
     if (!mounted || gameEnded) return;
 
-    Map<String, int>? bestMove = _getBestMove();
+    Map<String, int>? bestMove;
+    
+    switch (botDifficulty) {
+      case 'easy':
+        bestMove = _getEasyMove();
+        break;
+      case 'medium':
+        bestMove = _getMediumMove();
+        break;
+      case 'hard':
+        bestMove = _getHardMove();
+        break;
+      case 'expert':
+        bestMove = _getExpertMove();
+        break;
+      case 'nightmare':
+        bestMove = _getNightmareMove();
+        break;
+      default:
+        bestMove = _getMediumMove();
+    }
     
     if (bestMove == null) {
       _stopBotThinking();
@@ -458,34 +512,188 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
     );
   }
 
-  Map<String, int>? _getBestMove() {
+  // EASY AI - Random moves with 30% smart plays
+  Map<String, int>? _getEasyMove() {
     List<Map<String, int>> availableMoves = _getAvailableMoves();
     if (availableMoves.isEmpty) return null;
 
-    // 1. Try to win the big board
-    Map<String, int>? winMove = _findBigBoardWinMove(availableMoves);
-    if (winMove != null) return winMove;
+    // 30% chance to make a smart move
+    if (Random().nextDouble() < 0.3) {
+      Map<String, int>? smartMove = _findMiniBoardWinMove(availableMoves) ??
+                                   _findMiniBoardBlockMove(availableMoves);
+      if (smartMove != null) return smartMove;
+    }
 
-    // 2. Block player from winning big board
-    Map<String, int>? blockMove = _findBigBoardBlockMove(availableMoves);
-    if (blockMove != null) return blockMove;
-
-    // 3. Try to win a mini board
-    Map<String, int>? miniWinMove = _findMiniBoardWinMove(availableMoves);
-    if (miniWinMove != null) return miniWinMove;
-
-    // 4. Block player from winning mini board
-    Map<String, int>? miniBlockMove = _findMiniBoardBlockMove(availableMoves);
-    if (miniBlockMove != null) return miniBlockMove;
-
-    // 5. Strategic positioning
-    Map<String, int>? strategicMove = _findStrategicMove(availableMoves);
-    if (strategicMove != null) return strategicMove;
-
-    // 6. Fallback to best available move
-    return _findBestPositionalMove(availableMoves);
+    return availableMoves[Random().nextInt(availableMoves.length)];
   }
 
+  // MEDIUM AI - Basic strategy
+  Map<String, int>? _getMediumMove() {
+    List<Map<String, int>> availableMoves = _getAvailableMoves();
+    if (availableMoves.isEmpty) return null;
+
+    // Priority: Win big board > Block big board > Win mini > Block mini > Strategic
+    return _findBigBoardWinMove(availableMoves) ??
+           _findBigBoardBlockMove(availableMoves) ??
+           _findMiniBoardWinMove(availableMoves) ??
+           _findMiniBoardBlockMove(availableMoves) ??
+           _findStrategicMove(availableMoves) ??
+           availableMoves[Random().nextInt(availableMoves.length)];
+  }
+
+  // HARD AI - Minimax with depth 2
+  Map<String, int>? _getHardMove() {
+    List<Map<String, int>> availableMoves = _getAvailableMoves();
+    if (availableMoves.isEmpty) return null;
+
+    return _minimaxMove(availableMoves, 2);
+  }
+
+  // EXPERT AI - Minimax with depth 3
+  Map<String, int>? _getExpertMove() {
+    List<Map<String, int>> availableMoves = _getAvailableMoves();
+    if (availableMoves.isEmpty) return null;
+
+    return _minimaxMove(availableMoves, 3);
+  }
+
+  // NIGHTMARE AI - Minimax with depth 4 + perfect evaluation
+  Map<String, int>? _getNightmareMove() {
+    List<Map<String, int>> availableMoves = _getAvailableMoves();
+    if (availableMoves.isEmpty) return null;
+
+    return _minimaxMove(availableMoves, 4);
+  }
+
+  // Minimax implementation
+  Map<String, int>? _minimaxMove(List<Map<String, int>> moves, int depth) {
+    Map<String, int>? bestMove;
+    int bestScore = -10000;
+
+    for (var move in moves) {
+      GameState gameState = _simulateMove(move, 'O');
+      int score = _minimax(gameState, depth - 1, false, -10000, 10000);
+      
+      if (score > bestScore) {
+        bestScore = score;
+        bestMove = move;
+      }
+    }
+
+    return bestMove ?? moves[Random().nextInt(moves.length)];
+  }
+
+  int _minimax(GameState state, int depth, bool isMaximizing, int alpha, int beta) {
+    String winner = _evaluateGameState(state);
+    if (winner == 'O') return 1000 + depth;
+    if (winner == 'X') return -1000 - depth;
+    if (winner == 'D') return 0;
+    if (depth == 0) return _evaluatePosition(state);
+
+    List<Map<String, int>> moves = _getAvailableMovesFromState(state);
+    if (moves.isEmpty) return 0;
+
+    if (isMaximizing) {
+      int maxEval = -10000;
+      for (var move in moves) {
+        GameState newState = _simulateMove(move, 'O', state);
+        int eval = _minimax(newState, depth - 1, false, alpha, beta);
+        maxEval = math.max(maxEval, eval);
+        alpha = math.max(alpha, eval);
+        if (beta <= alpha) break;
+      }
+      return maxEval;
+    } else {
+      int minEval = 10000;
+      for (var move in moves) {
+        GameState newState = _simulateMove(move, 'X', state);
+        int eval = _minimax(newState, depth - 1, true, alpha, beta);
+        minEval = math.min(minEval, eval);
+        beta = math.min(beta, eval);
+        if (beta <= alpha) break;
+      }
+      return minEval;
+    }
+  }
+
+  int _evaluatePosition(GameState state) {
+    int score = 0;
+    
+    // Evaluate big board position
+    score += _evaluateBigBoard(state.bigBoardStatus) * 10;
+    
+    // Evaluate mini boards
+    for (int i = 0; i < 3; i++) {
+      for (int j = 0; j < 3; j++) {
+        if (state.bigBoardStatus[i][j] == '') {
+          score += _evaluateMiniBoard(state.board[i][j]);
+        }
+      }
+    }
+    
+    return score;
+  }
+
+  int _evaluateBigBoard(List<List<String>> bigBoard) {
+    int score = 0;
+    List<List<List<int>>> patterns = [
+      [[0,0], [0,1], [0,2]], [[1,0], [1,1], [1,2]], [[2,0], [2,1], [2,2]], // Rows
+      [[0,0], [1,0], [2,0]], [[0,1], [1,1], [2,1]], [[0,2], [1,2], [2,2]], // Columns
+      [[0,0], [1,1], [2,2]], [[0,2], [1,1], [2,0]] // Diagonals
+    ];
+
+    for (var pattern in patterns) {
+      int botCount = 0, playerCount = 0;
+      
+      for (var pos in pattern) {
+        String cell = bigBoard[pos[0]][pos[1]];
+        if (cell == 'O') botCount++;
+        else if (cell == 'X') playerCount++;
+      }
+      
+      if (playerCount == 0) {
+        if (botCount == 3) score += 100;
+        else if (botCount == 2) score += 10;
+        else if (botCount == 1) score += 1;
+      } else if (botCount == 0) {
+        if (playerCount == 3) score -= 100;
+        else if (playerCount == 2) score -= 10;
+        else if (playerCount == 1) score -= 1;
+      }
+    }
+
+    return score;
+  }
+
+  int _evaluateMiniBoard(List<String> miniBoard) {
+    int score = 0;
+    List<List<int>> patterns = [
+      [0,1,2], [3,4,5], [6,7,8], // Rows
+      [0,3,6], [1,4,7], [2,5,8], // Columns
+      [0,4,8], [2,4,6] // Diagonals
+    ];
+
+    for (var pattern in patterns) {
+      int botCount = 0, playerCount = 0;
+      
+      for (int pos in pattern) {
+        if (miniBoard[pos] == 'O') botCount++;
+        else if (miniBoard[pos] == 'X') playerCount++;
+      }
+      
+      if (playerCount == 0) {
+        if (botCount == 2) score += 5;
+        else if (botCount == 1) score += 1;
+      } else if (botCount == 0) {
+        if (playerCount == 2) score -= 5;
+        else if (playerCount == 1) score -= 1;
+      }
+    }
+
+    return score;
+  }
+
+  // Helper methods
   List<Map<String, int>> _getAvailableMoves() {
     List<Map<String, int>> availableMoves = [];
 
@@ -513,10 +721,125 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
     return availableMoves;
   }
 
-  // Check if bot can win big board with this move
+  List<Map<String, int>> _getAvailableMovesFromState(GameState state) {
+    List<Map<String, int>> availableMoves = [];
+
+    for (int bigRow = 0; bigRow < 3; bigRow++) {
+      for (int bigCol = 0; bigCol < 3; bigCol++) {
+        if (state.bigBoardStatus[bigRow][bigCol] != "") continue;
+
+        if (state.activeBigRow != null &&
+            (bigRow != state.activeBigRow || bigCol != state.activeBigCol))
+          continue;
+
+        for (int i = 0; i < 9; i++) {
+          if (state.board[bigRow][bigCol][i].isEmpty) {
+            availableMoves.add({
+              "bigRow": bigRow,
+              "bigCol": bigCol,
+              "smallRow": i ~/ 3,
+              "smallCol": i % 3,
+            });
+          }
+        }
+      }
+    }
+
+    return availableMoves;
+  }
+
+  GameState _simulateMove(Map<String, int> move, String player, [GameState? currentState]) {
+    GameState state = currentState ?? GameState.fromCurrent(board, bigBoardStatus, activeBigRow, activeBigCol);
+
+    int bigRow = move["bigRow"]!;
+    int bigCol = move["bigCol"]!;
+    int smallIndex = move["smallRow"]! * 3 + move["smallCol"]!;
+
+    state.board[bigRow][bigCol][smallIndex] = player;
+
+    String miniResult = _checkMiniBoard(state.board[bigRow][bigCol]);
+    if (miniResult != "") {
+      state.bigBoardStatus[bigRow][bigCol] = miniResult;
+      if (miniResult == "X" || miniResult == "O") {
+        state.board[bigRow][bigCol] = List.generate(9, (_) => miniResult);
+      } else if (miniResult == "D") {
+        state.board[bigRow][bigCol] = List.generate(9, (_) => "D");
+      }
+    }
+
+    int nextBigRow = move["smallRow"]!;
+    int nextBigCol = move["smallCol"]!;
+
+    if (state.bigBoardStatus[nextBigRow][nextBigCol] != "" ||
+        state.board[nextBigRow][nextBigCol].every((c) => c.isNotEmpty)) {
+      state.activeBigRow = null;
+      state.activeBigCol = null;
+    } else {
+      state.activeBigRow = nextBigRow;
+      state.activeBigCol = nextBigCol;
+    }
+
+    return state;
+  }
+
+  String _evaluateGameState(GameState state) {
+    return _checkBigBoardFromState(state.bigBoardStatus);
+  }
+
+  String _checkBigBoardFromState(List<List<String>> bigBoard) {
+    // Check rows
+    for (int i = 0; i < 3; i++) {
+      if (bigBoard[i][0] != "" &&
+          bigBoard[i][0] != "D" &&
+          bigBoard[i][0] == bigBoard[i][1] &&
+          bigBoard[i][1] == bigBoard[i][2]) {
+        return bigBoard[i][0];
+      }
+    }
+
+    // Check columns
+    for (int i = 0; i < 3; i++) {
+      if (bigBoard[0][i] != "" &&
+          bigBoard[0][i] != "D" &&
+          bigBoard[0][i] == bigBoard[1][i] &&
+          bigBoard[1][i] == bigBoard[2][i]) {
+        return bigBoard[0][i];
+      }
+    }
+
+    // Check diagonals
+    if (bigBoard[0][0] != "" &&
+        bigBoard[0][0] != "D" &&
+        bigBoard[0][0] == bigBoard[1][1] &&
+        bigBoard[1][1] == bigBoard[2][2]) {
+      return bigBoard[0][0];
+    }
+
+    if (bigBoard[0][2] != "" &&
+        bigBoard[0][2] != "D" &&
+        bigBoard[0][2] == bigBoard[1][1] &&
+        bigBoard[1][1] == bigBoard[2][0]) {
+      return bigBoard[0][2];
+    }
+
+    // Check if full
+    bool isFull = true;
+    for (int i = 0; i < 3; i++) {
+      for (int j = 0; j < 3; j++) {
+        if (bigBoard[i][j] == "") {
+          isFull = false;
+          break;
+        }
+      }
+      if (!isFull) break;
+    }
+
+    return isFull ? "D" : "";
+  }
+
+  // Simple move finders for easier difficulties
   Map<String, int>? _findBigBoardWinMove(List<Map<String, int>> moves) {
     for (var move in moves) {
-      // Simulate the move
       List<List<String>> tempBigBoard = List.generate(
         3, (i) => List.generate(3, (j) => bigBoardStatus[i][j])
       );
@@ -528,7 +851,6 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
       if (miniResult == "O") {
         tempBigBoard[move["bigRow"]!][move["bigCol"]!] = "O";
         
-        // Check if this wins the big board
         if (_checkBigBoardWin(tempBigBoard, "O")) {
           return move;
         }
@@ -537,7 +859,6 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
     return null;
   }
 
-  // Check if bot needs to block player from winning big board
   Map<String, int>? _findBigBoardBlockMove(List<Map<String, int>> moves) {
     for (var move in moves) {
       List<List<String>> tempBigBoard = List.generate(
@@ -559,7 +880,6 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
     return null;
   }
 
-  // Try to win a mini board
   Map<String, int>? _findMiniBoardWinMove(List<Map<String, int>> moves) {
     for (var move in moves) {
       List<String> tempMiniBoard = List.from(board[move["bigRow"]!][move["bigCol"]!]);
@@ -572,7 +892,6 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
     return null;
   }
 
-  // Block player from winning mini board
   Map<String, int>? _findMiniBoardBlockMove(List<Map<String, int>> moves) {
     for (var move in moves) {
       List<String> tempMiniBoard = List.from(board[move["bigRow"]!][move["bigCol"]!]);
@@ -585,7 +904,6 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
     return null;
   }
 
-  // Strategic moves (center, corners, avoid sending player to good boards)
   Map<String, int>? _findStrategicMove(List<Map<String, int>> moves) {
     List<Map<String, int>> goodMoves = [];
 
@@ -599,20 +917,6 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
       // Prefer corners
       if ([0, 2, 6, 8].contains(smallPos)) score += 5;
       
-      // Avoid sending player to advantageous boards
-      int nextBigRow = move["smallRow"]!;
-      int nextBigCol = move["smallCol"]!;
-      
-      if (bigBoardStatus[nextBigRow][nextBigCol] == "" && 
-          !board[nextBigRow][nextBigCol].every((c) => c.isNotEmpty)) {
-        // Check if player could win this board easily
-        int playerAdvantage = _evaluatePlayerAdvantage(nextBigRow, nextBigCol);
-        score -= playerAdvantage * 3;
-      } else {
-        // Sending player to invalid board (good for us)
-        score += 15;
-      }
-
       if (score > 0) {
         goodMoves.add({...move, "score": score});
       }
@@ -624,39 +928,6 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
     }
 
     return null;
-  }
-
-  int _evaluatePlayerAdvantage(int bigRow, int bigCol) {
-    List<String> miniBoard = board[bigRow][bigCol];
-    int playerCount = 0;
-    int botCount = 0;
-    
-    for (String cell in miniBoard) {
-      if (cell == "X") playerCount++;
-      if (cell == "O") botCount++;
-    }
-    
-    // More player pieces = more advantage for player
-    return playerCount - botCount;
-  }
-
-  // Find best positional move as fallback
-  Map<String, int>? _findBestPositionalMove(List<Map<String, int>> moves) {
-    if (moves.isEmpty) return null;
-
-    // Prioritize center and corner positions
-    List<int> preferredPositions = [4, 0, 2, 6, 8, 1, 3, 5, 7];
-    
-    for (int pos in preferredPositions) {
-      for (var move in moves) {
-        int smallPos = move["smallRow"]! * 3 + move["smallCol"]!;
-        if (smallPos == pos) {
-          return move;
-        }
-      }
-    }
-
-    return moves.first;
   }
 
   bool _checkBigBoardWin(List<List<String>> tempBigBoard, String player) {
@@ -698,6 +969,23 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
     int minutes = seconds ~/ 60;
     int remainingSeconds = seconds % 60;
     return '${minutes.toString().padLeft(2, '0')}:${remainingSeconds.toString().padLeft(2, '0')}';
+  }
+
+  Color _getDifficultyColor() {
+    switch (botDifficulty) {
+      case 'easy':
+        return Colors.green;
+      case 'medium':
+        return Colors.orange;
+      case 'hard':
+        return Colors.red;
+      case 'expert':
+        return Colors.purple;
+      case 'nightmare':
+        return Colors.black;
+      default:
+        return Colors.orange;
+    }
   }
 
   Widget _buildGameHeader() {
@@ -774,12 +1062,12 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(
-                        color: Colors.red.withOpacity(0.8),
+                        color: _getDifficultyColor().withOpacity(0.8),
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: const Text(
-                        'HARD',
-                        style: TextStyle(
+                      child: Text(
+                        botDifficulty.toUpperCase(),
+                        style: const TextStyle(
                           color: Colors.white,
                           fontSize: 10,
                           fontWeight: FontWeight.bold,
@@ -857,7 +1145,7 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
                       height: 60,
                       decoration: BoxDecoration(
                         color: isBot
-                            ? const Color(0xFFFF6B6B)
+                            ? _getDifficultyColor()
                             : const Color(0xFF4ECDC4),
                         borderRadius: BorderRadius.circular(30),
                         border: Border.all(color: Colors.white, width: 3),
@@ -905,12 +1193,12 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
-                      color: Colors.red.withOpacity(0.3),
+                      color: _getDifficultyColor().withOpacity(0.3),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Text(
-                      'HARD AI',
-                      style: TextStyle(
+                    child: Text(
+                      '${botDifficulty.toUpperCase()} AI',
+                      style: const TextStyle(
                         fontSize: 8,
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
@@ -973,7 +1261,7 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
                     _buildPlayerCard("X", "You", false, currentPlayer == "X"),
-                    _buildPlayerCard("O", "Hard Bot", true, currentPlayer == "O"),
+                    _buildPlayerCard("O", "${botDifficulty.toUpperCase()} Bot", true, currentPlayer == "O"),
                   ],
                 ),
                 const SizedBox(height: 16),
@@ -1232,6 +1520,28 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
           ),
         ),
       ),
+    );
+  }
+}
+
+// Game state class for minimax algorithm
+class GameState {
+  List<List<List<String>>> board;
+  List<List<String>> bigBoardStatus;
+  int? activeBigRow;
+  int? activeBigCol;
+  
+  GameState(this.board, this.bigBoardStatus, this.activeBigRow, this.activeBigCol);
+  
+  factory GameState.fromCurrent(List<List<List<String>>> currentBoard, 
+                                List<List<String>> currentBigBoard,
+                                int? currentActiveBigRow,
+                                int? currentActiveBigCol) {
+    return GameState(
+      List.generate(3, (i) => List.generate(3, (j) => List.from(currentBoard[i][j]))),
+      List.generate(3, (i) => List.from(currentBigBoard[i])),
+      currentActiveBigRow,
+      currentActiveBigCol,
     );
   }
 }
