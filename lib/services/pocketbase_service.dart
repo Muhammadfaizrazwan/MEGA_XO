@@ -23,13 +23,16 @@ class PocketBaseService {
     if (_pb != null) return _pb!;
 
     final prefsInstance = await prefs;
-    
+
     final store = AsyncAuthStore(
       save: (String data) async => prefsInstance.setString('pb_auth', data),
       initial: prefsInstance.getString('pb_auth'),
     );
 
-    _pb = PocketBase('https://megaxo-dev.lightcodedigital.cloud', authStore: store);
+    _pb = PocketBase(
+      'https://megaxo-dev.lightcodedigital.cloud',
+      authStore: store,
+    );
     return _pb!;
   }
 
@@ -45,7 +48,7 @@ class PocketBaseService {
     try {
       // Initialize PocketBase
       final pocketbase = await pb;
-      
+
       await _loadAuth();
 
       pocketbase.authStore.onChange.listen((AuthStoreEvent event) {
@@ -81,12 +84,21 @@ class PocketBaseService {
         final data = jsonDecode(stored);
         if (data['token'] != null && data['model'] != null) {
           final pocketbase = await pb;
-          pocketbase.authStore.save(data['token'], RecordModel.fromJson(data['model']));
-          
+          pocketbase.authStore.save(
+            data['token'],
+            RecordModel.fromJson(data['model']),
+          );
+
           // Also update SharedPreferences login state
           await prefsInstance.setBool('isLoggedIn', true);
-          await prefsInstance.setString('userEmail', data['model']['email'] ?? '');
-          await prefsInstance.setString('userName', data['model']['name'] ?? data['model']['username'] ?? '');
+          await prefsInstance.setString(
+            'userEmail',
+            data['model']['email'] ?? '',
+          );
+          await prefsInstance.setString(
+            'userName',
+            data['model']['name'] ?? data['model']['username'] ?? '',
+          );
           await prefsInstance.setString('userId', data['model']['id'] ?? '');
         }
       }
@@ -109,14 +121,17 @@ class PocketBaseService {
 
       final prefsInstance = await prefs;
       await prefsInstance.setString('pb_auth', data);
-      
+
       // Also update SharedPreferences login state
       // ignore: deprecated_member_use
       final model = pocketbase.authStore.model;
       if (model != null) {
         await prefsInstance.setBool('isLoggedIn', true);
         await prefsInstance.setString('userEmail', model.data['email'] ?? '');
-        await prefsInstance.setString('userName', model.data['name'] ?? model.data['username'] ?? '');
+        await prefsInstance.setString(
+          'userName',
+          model.data['name'] ?? model.data['username'] ?? '',
+        );
         await prefsInstance.setString('userId', model.id);
       }
     } catch (e) {
@@ -140,13 +155,14 @@ class PocketBaseService {
   Future<Map<String, dynamic>> loginWithGoogle() async {
     try {
       final pocketbase = await pb;
-      final authData = await pocketbase.collection('users').authWithOAuth2('google', (
-        url,
-      ) async {
-        if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
-          throw Exception('Could not launch $url');
-        }
-      });
+      final authData = await pocketbase.collection('users').authWithOAuth2(
+        'google',
+        (url) async {
+          if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+            throw Exception('Could not launch $url');
+          }
+        },
+      );
 
       // Save the auth data
       await _saveAuth();
@@ -216,12 +232,12 @@ class PocketBaseService {
       final prefsInstance = await prefs;
       final isLoggedIn = prefsInstance.getBool('isLoggedIn') ?? false;
       final userEmail = prefsInstance.getString('userEmail');
-      
+
       // Double check with PocketBase auth if SharedPreferences says logged in
       if (isLoggedIn && userEmail != null) {
         return await checkAuthStatus();
       }
-      
+
       return false;
     } catch (e) {
       print("Error checking login status: $e");

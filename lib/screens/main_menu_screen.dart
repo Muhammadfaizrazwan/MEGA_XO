@@ -59,7 +59,7 @@ class _MainMenuScreenState extends State<MainMenuScreen>
 
   String _userEmail = '';
   String _userName = '';
-  
+
   // Background Music
   final BackgroundMusic _backgroundMusic = BackgroundMusic();
   bool _isMusicEnabled = true;
@@ -127,9 +127,10 @@ class _MainMenuScreenState extends State<MainMenuScreen>
     );
 
     // Wave animation
-    _waveAnimation = Tween<double>(begin: 0.0, end: 2 * pi).animate(
-      CurvedAnimation(parent: _waveController, curve: Curves.linear),
-    );
+    _waveAnimation = Tween<double>(
+      begin: 0.0,
+      end: 2 * pi,
+    ).animate(CurvedAnimation(parent: _waveController, curve: Curves.linear));
 
     // Start animations
     _logoController.forward();
@@ -229,9 +230,10 @@ class _MainMenuScreenState extends State<MainMenuScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-    
-    if (!_isInitialized) return; // Don't handle lifecycle changes until initialized
-    
+
+    if (!_isInitialized)
+      return; // Don't handle lifecycle changes until initialized
+
     switch (state) {
       case AppLifecycleState.paused:
       case AppLifecycleState.inactive:
@@ -304,28 +306,30 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                 if (_isMusicPlaying) {
                   await _backgroundMusic.pause();
                 }
-                
+
                 final result = await Navigator.push(
                   context,
                   PageRouteBuilder(
-                    pageBuilder: (context, animation, secondaryAnimation) => ProfileScreen(
-                      isMusicEnabled: _isMusicEnabled,
-                      onMusicToggle: _toggleMusic,
-                    ),
-                    transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                      return SlideTransition(
-                        position: animation.drive(
-                          Tween(
-                            begin: const Offset(1.0, 0.0),
-                            end: Offset.zero,
-                          ).chain(CurveTween(curve: Curves.easeInOut)),
+                    pageBuilder: (context, animation, secondaryAnimation) =>
+                        ProfileScreen(
+                          isMusicEnabled: _isMusicEnabled,
+                          onMusicToggle: _toggleMusic,
                         ),
-                        child: child,
-                      );
-                    },
+                    transitionsBuilder:
+                        (context, animation, secondaryAnimation, child) {
+                          return SlideTransition(
+                            position: animation.drive(
+                              Tween(
+                                begin: const Offset(1.0, 0.0),
+                                end: Offset.zero,
+                              ).chain(CurveTween(curve: Curves.easeInOut)),
+                            ),
+                            child: child,
+                          );
+                        },
                   ),
                 );
-                
+
                 // Resume music when coming back from profile if needed
                 if (_isMusicEnabled && _isMusicPlaying && mounted) {
                   await _backgroundMusic.resume();
@@ -333,7 +337,7 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                   // Restart music if settings changed
                   await _startBackgroundMusic();
                 }
-                
+
                 // Check if user logged out
                 if (result == 'logout') {
                   // User logged out from profile screen
@@ -403,7 +407,11 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                 const SizedBox(height: 20),
                 ShaderMask(
                   shaderCallback: (bounds) => const LinearGradient(
-                    colors: [Color(0xFFFFD700), Color(0xFFFFA500), Color(0xFFFF6B35)],
+                    colors: [
+                      Color(0xFFFFD700),
+                      Color(0xFFFFA500),
+                      Color(0xFFFF6B35),
+                    ],
                   ).createShader(bounds),
                   child: const Text(
                     'MEGA',
@@ -520,10 +528,16 @@ class _MainMenuScreenState extends State<MainMenuScreen>
               double size = 20 + (index * 5);
               double opacity = 0.05 + (index * 0.01);
               double speed = 0.3 + (index * 0.1);
-              
+
               return Positioned(
-                top: 80 + (index * 120) + (40 * sin(_backgroundAnimation.value * speed * 2 * pi)),
-                left: 20 + (index * 60) + (30 * cos(_backgroundAnimation.value * speed * 2 * pi)),
+                top:
+                    80 +
+                    (index * 120) +
+                    (40 * sin(_backgroundAnimation.value * speed * 2 * pi)),
+                left:
+                    20 +
+                    (index * 60) +
+                    (30 * cos(_backgroundAnimation.value * speed * 2 * pi)),
                 child: Transform.rotate(
                   angle: _backgroundAnimation.value * speed * 2 * pi,
                   child: Icon(
@@ -534,7 +548,7 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                 ),
               );
             }),
-            
+
             // Floating X and O shapes
             ...List.generate(8, (index) {
               bool isX = index % 2 == 0;
@@ -543,19 +557,29 @@ class _MainMenuScreenState extends State<MainMenuScreen>
               double xOffset = (index * 80) % 300;
               double yOffset = (index * 100) % 600;
               double speed = 0.5 + (index * 0.1);
-              
+
               return Positioned(
-                top: yOffset + (50 * sin(_backgroundAnimation.value * speed * 2 * pi + index)),
-                left: xOffset + (40 * cos(_backgroundAnimation.value * speed * 2 * pi + index)),
+                top:
+                    yOffset +
+                    (50 *
+                        sin(
+                          _backgroundAnimation.value * speed * 2 * pi + index,
+                        )),
+                left:
+                    xOffset +
+                    (40 *
+                        cos(
+                          _backgroundAnimation.value * speed * 2 * pi + index,
+                        )),
                 child: Transform.rotate(
                   angle: _backgroundAnimation.value * speed * 2 * pi,
                   child: Text(
                     isX ? '×' : '○',
                     style: TextStyle(
                       fontSize: size,
-                      color: isX 
-                        ? Colors.red.withOpacity(opacity)
-                        : Colors.green.withOpacity(opacity),
+                      color: isX
+                          ? Colors.red.withOpacity(opacity)
+                          : Colors.green.withOpacity(opacity),
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -575,8 +599,8 @@ class _MainMenuScreenState extends State<MainMenuScreen>
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             colors: [
-              Color(0xFF5800FF), 
-              Color(0xFF330066), 
+              Color(0xFF5800FF),
+              Color(0xFF330066),
               Color(0xFF1A0033),
               Color(0xFF0D001A),
             ],
@@ -589,17 +613,17 @@ class _MainMenuScreenState extends State<MainMenuScreen>
           children: [
             // Animated background with waves and particles
             _buildAnimatedBackground(),
-            
+
             // Floating shapes
             _buildFloatingShapes(),
-            
+
             // Main content
             SafeArea(
               child: Column(
                 children: [
                   // Profile button only
                   _buildProfileButton(),
-                  
+
                   // Main content with logo and buttons
                   Expanded(
                     child: Padding(
@@ -621,18 +645,36 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                                       Navigator.push(
                                         context,
                                         PageRouteBuilder(
-                                          pageBuilder: (context, animation, secondaryAnimation) => const PvPScreen(),
-                                          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                                            return SlideTransition(
-                                              position: animation.drive(
-                                                Tween(
-                                                  begin: const Offset(1.0, 0.0),
-                                                  end: Offset.zero,
-                                                ).chain(CurveTween(curve: Curves.easeInOut)),
-                                              ),
-                                              child: child,
-                                            );
-                                          },
+                                          pageBuilder:
+                                              (
+                                                context,
+                                                animation,
+                                                secondaryAnimation,
+                                              ) => const PvPScreen(),
+                                          transitionsBuilder:
+                                              (
+                                                context,
+                                                animation,
+                                                secondaryAnimation,
+                                                child,
+                                              ) {
+                                                return SlideTransition(
+                                                  position: animation.drive(
+                                                    Tween(
+                                                      begin: const Offset(
+                                                        1.0,
+                                                        0.0,
+                                                      ),
+                                                      end: Offset.zero,
+                                                    ).chain(
+                                                      CurveTween(
+                                                        curve: Curves.easeInOut,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  child: child,
+                                                );
+                                              },
                                         ),
                                       );
                                     },
@@ -640,24 +682,43 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                                   ),
                                   _buildAnimatedButton(
                                     context,
-                                    "PvE (Lawan Bot)",
+                                    "PvE (Bot)",
                                     Icons.smart_toy,
                                     () {
                                       Navigator.push(
                                         context,
                                         PageRouteBuilder(
-                                          pageBuilder: (context, animation, secondaryAnimation) => const DifficultySelectionScreen(),
-                                          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                                            return SlideTransition(
-                                              position: animation.drive(
-                                                Tween(
-                                                  begin: const Offset(1.0, 0.0),
-                                                  end: Offset.zero,
-                                                ).chain(CurveTween(curve: Curves.easeInOut)),
-                                              ),
-                                              child: child,
-                                            );
-                                          },
+                                          pageBuilder:
+                                              (
+                                                context,
+                                                animation,
+                                                secondaryAnimation,
+                                              ) =>
+                                                  const DifficultySelectionScreen(),
+                                          transitionsBuilder:
+                                              (
+                                                context,
+                                                animation,
+                                                secondaryAnimation,
+                                                child,
+                                              ) {
+                                                return SlideTransition(
+                                                  position: animation.drive(
+                                                    Tween(
+                                                      begin: const Offset(
+                                                        1.0,
+                                                        0.0,
+                                                      ),
+                                                      end: Offset.zero,
+                                                    ).chain(
+                                                      CurveTween(
+                                                        curve: Curves.easeInOut,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  child: child,
+                                                );
+                                              },
                                         ),
                                       );
                                     },
@@ -671,18 +732,37 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                                       Navigator.push(
                                         context,
                                         PageRouteBuilder(
-                                          pageBuilder: (context, animation, secondaryAnimation) => const MultiplayerRoomScreen(),
-                                          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                                            return SlideTransition(
-                                              position: animation.drive(
-                                                Tween(
-                                                  begin: const Offset(1.0, 0.0),
-                                                  end: Offset.zero,
-                                                ).chain(CurveTween(curve: Curves.easeInOut)),
-                                              ),
-                                              child: child,
-                                            );
-                                          },
+                                          pageBuilder:
+                                              (
+                                                context,
+                                                animation,
+                                                secondaryAnimation,
+                                              ) =>
+                                                  const MultiplayerRoomScreen(),
+                                          transitionsBuilder:
+                                              (
+                                                context,
+                                                animation,
+                                                secondaryAnimation,
+                                                child,
+                                              ) {
+                                                return SlideTransition(
+                                                  position: animation.drive(
+                                                    Tween(
+                                                      begin: const Offset(
+                                                        1.0,
+                                                        0.0,
+                                                      ),
+                                                      end: Offset.zero,
+                                                    ).chain(
+                                                      CurveTween(
+                                                        curve: Curves.easeInOut,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  child: child,
+                                                );
+                                              },
                                         ),
                                       );
                                     },
@@ -696,18 +776,36 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                                       Navigator.push(
                                         context,
                                         PageRouteBuilder(
-                                          pageBuilder: (context, animation, secondaryAnimation) => const RulesScreen(),
-                                          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                                            return SlideTransition(
-                                              position: animation.drive(
-                                                Tween(
-                                                  begin: const Offset(1.0, 0.0),
-                                                  end: Offset.zero,
-                                                ).chain(CurveTween(curve: Curves.easeInOut)),
-                                              ),
-                                              child: child,
-                                            );
-                                          },
+                                          pageBuilder:
+                                              (
+                                                context,
+                                                animation,
+                                                secondaryAnimation,
+                                              ) => const RulesScreen(),
+                                          transitionsBuilder:
+                                              (
+                                                context,
+                                                animation,
+                                                secondaryAnimation,
+                                                child,
+                                              ) {
+                                                return SlideTransition(
+                                                  position: animation.drive(
+                                                    Tween(
+                                                      begin: const Offset(
+                                                        1.0,
+                                                        0.0,
+                                                      ),
+                                                      end: Offset.zero,
+                                                    ).chain(
+                                                      CurveTween(
+                                                        curve: Curves.easeInOut,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  child: child,
+                                                );
+                                              },
                                         ),
                                       );
                                     },
@@ -744,20 +842,20 @@ class AnimatedBackgroundPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     // Create gradient waves
-    final paint = Paint()
-      ..style = PaintingStyle.fill;
+    final paint = Paint()..style = PaintingStyle.fill;
 
     // Wave 1 - Purple waves
     final path1 = Path();
     path1.moveTo(0, size.height * 0.7);
-    
+
     for (double x = 0; x <= size.width; x += 1) {
-      double y = size.height * 0.7 + 
-                 30 * sin((x / size.width * 4 * pi) + waveAnimation) +
-                 15 * sin((x / size.width * 8 * pi) + waveAnimation * 1.5);
+      double y =
+          size.height * 0.7 +
+          30 * sin((x / size.width * 4 * pi) + waveAnimation) +
+          15 * sin((x / size.width * 8 * pi) + waveAnimation * 1.5);
       path1.lineTo(x, y);
     }
-    
+
     path1.lineTo(size.width, size.height);
     path1.lineTo(0, size.height);
     path1.close();
@@ -770,20 +868,21 @@ class AnimatedBackgroundPainter extends CustomPainter {
         const Color(0xFF8A2BE2).withOpacity(0.2),
       ],
     ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
-    
+
     canvas.drawPath(path1, paint);
 
     // Wave 2 - Lighter purple waves
     final path2 = Path();
     path2.moveTo(0, size.height * 0.8);
-    
+
     for (double x = 0; x <= size.width; x += 1) {
-      double y = size.height * 0.8 + 
-                 20 * sin((x / size.width * 6 * pi) + waveAnimation * 0.8) +
-                 10 * sin((x / size.width * 12 * pi) + waveAnimation * 2);
+      double y =
+          size.height * 0.8 +
+          20 * sin((x / size.width * 6 * pi) + waveAnimation * 0.8) +
+          10 * sin((x / size.width * 12 * pi) + waveAnimation * 2);
       path2.lineTo(x, y);
     }
-    
+
     path2.lineTo(size.width, size.height);
     path2.lineTo(0, size.height);
     path2.close();
@@ -796,7 +895,7 @@ class AnimatedBackgroundPainter extends CustomPainter {
         const Color(0xFFBA55D3).withOpacity(0.1),
       ],
     ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
-    
+
     canvas.drawPath(path2, paint);
 
     // Particle effects
@@ -805,7 +904,7 @@ class AnimatedBackgroundPainter extends CustomPainter {
       double x = (i * 47 + particleAnimation * 100) % size.width;
       double y = (i * 73 + particleAnimation * 80) % size.height;
       double opacity = (sin(particleAnimation * 2 * pi + i) + 1) / 2 * 0.1;
-      
+
       paint.color = Colors.white.withOpacity(opacity);
       canvas.drawCircle(Offset(x, y), 2, paint);
     }
@@ -814,7 +913,7 @@ class AnimatedBackgroundPainter extends CustomPainter {
     paint.color = Colors.white.withOpacity(0.03);
     paint.strokeWidth = 1;
     paint.style = PaintingStyle.stroke;
-    
+
     double gridSize = 50;
     for (double x = 0; x < size.width; x += gridSize) {
       canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);

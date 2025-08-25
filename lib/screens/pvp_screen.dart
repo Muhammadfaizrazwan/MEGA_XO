@@ -700,17 +700,17 @@ class _PvPScreenState extends State<PvPScreen> with TickerProviderStateMixin {
             borderRadius: BorderRadius.circular(16),
           ),
           title: const Text(
-            'Keluar dari Game?',
+            'Quit the Game?',
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
           ),
           content: const Text(
-            'Progress game akan hilang. Yakin ingin kembali ke menu utama?',
+            'Game progress will be lost. Are you sure you want to return to the main menu?',
             style: TextStyle(color: Colors.white70),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: Text('Batal', style: TextStyle(color: Colors.grey[300])),
+              child: Text('Cancel', style: TextStyle(color: Colors.grey[300])),
             ),
             ElevatedButton(
               onPressed: () {
@@ -724,7 +724,7 @@ class _PvPScreenState extends State<PvPScreen> with TickerProviderStateMixin {
                   borderRadius: BorderRadius.circular(8),
                 ),
               ),
-              child: const Text('Keluar'),
+              child: const Text('Exit'),
             ),
           ],
         );

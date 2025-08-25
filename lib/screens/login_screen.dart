@@ -15,19 +15,27 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
   bool _isLoading = false;
 
   // Animation controllers
-  late AnimationController _titleController;
-  late AnimationController _formController;
+  late AnimationController _fadeController;
+  late AnimationController _slideController;
   late AnimationController _backgroundController;
   late AnimationController _loadingController;
-  late AnimationController _pulseController;
+  late AnimationController _logoController;
+  late AnimationController _typewriterController;
+  late AnimationController _buttonController;
 
-  late Animation<double> _titleScaleAnimation;
-  late Animation<double> _titleOpacityAnimation;
-  late Animation<double> _formSlideAnimation;
-  late Animation<double> _formOpacityAnimation;
+  late Animation<double> _fadeAnimation;
+  late Animation<Offset> _slideAnimation;
   late Animation<double> _backgroundAnimation;
   late Animation<double> _loadingAnimation;
-  late Animation<double> _pulseAnimation;
+  late Animation<double> _logoScaleAnimation;
+  late Animation<double> _logoRotationAnimation;
+  late Animation<double> _typewriterAnimation;
+  late Animation<double> _buttonScaleAnimation;
+  late Animation<double> _buttonGlowAnimation;
+
+  // Typewriter text
+  final String _typewriterText = "Game On!";
+  String _displayText = "";
 
   @override
   void initState() {
@@ -38,50 +46,51 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
   }
 
   void _initAnimations() {
-    _titleController = AnimationController(
-      duration: const Duration(milliseconds: 1500),
+    _fadeController = AnimationController(
+      duration: const Duration(milliseconds: 1800),
       vsync: this,
     );
 
-    _formController = AnimationController(
-      duration: const Duration(milliseconds: 1200),
+    _slideController = AnimationController(
+      duration: const Duration(milliseconds: 1600),
       vsync: this,
     );
 
     _backgroundController = AnimationController(
-      duration: const Duration(seconds: 10),
+      duration: const Duration(seconds: 20),
       vsync: this,
     );
 
     _loadingController = AnimationController(
-      duration: const Duration(milliseconds: 1000),
+      duration: const Duration(milliseconds: 1200),
       vsync: this,
     );
 
-    _pulseController = AnimationController(
-      duration: const Duration(seconds: 2),
+    _logoController = AnimationController(
+      duration: const Duration(seconds: 4),
       vsync: this,
     );
 
-    _titleScaleAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _titleController, curve: Curves.elasticOut),
+    _typewriterController = AnimationController(
+      duration: const Duration(milliseconds: 2000),
+      vsync: this,
     );
 
-    _titleOpacityAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(parent: _titleController, curve: Curves.easeIn));
-
-    _formSlideAnimation = Tween<double>(begin: 80.0, end: 0.0).animate(
-      CurvedAnimation(parent: _formController, curve: Curves.easeOutBack),
+    _buttonController = AnimationController(
+      duration: const Duration(milliseconds: 2000),
+      vsync: this,
     );
 
-    _formOpacityAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(parent: _formController, curve: Curves.easeIn));
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _fadeController, curve: Curves.easeOutCubic),
+    );
 
-    _backgroundAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.5),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _slideController, curve: Curves.easeOutBack));
+
+    _backgroundAnimation = Tween<double>(begin: 0.0, end: 2.0).animate(
       CurvedAnimation(parent: _backgroundController, curve: Curves.linear),
     );
 
@@ -89,18 +98,48 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
       CurvedAnimation(parent: _loadingController, curve: Curves.easeInOut),
     );
 
-    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.1).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    _logoScaleAnimation = Tween<double>(begin: 1.0, end: 1.05).animate(
+      CurvedAnimation(parent: _logoController, curve: Curves.easeInOut),
     );
+
+    _logoRotationAnimation = Tween<double>(begin: 0.0, end: 0.05).animate(
+      CurvedAnimation(parent: _logoController, curve: Curves.easeInOut),
+    );
+
+    _typewriterAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _typewriterController, curve: Curves.easeInOut),
+    );
+
+    _buttonScaleAnimation = Tween<double>(begin: 1.0, end: 1.02).animate(
+      CurvedAnimation(parent: _buttonController, curve: Curves.easeInOut),
+    );
+
+    _buttonGlowAnimation = Tween<double>(begin: 0.3, end: 0.8).animate(
+      CurvedAnimation(parent: _buttonController, curve: Curves.easeInOut),
+    );
+
+    // Typewriter animation listener
+    _typewriterAnimation.addListener(() {
+      final progress = _typewriterAnimation.value;
+      final targetLength = (_typewriterText.length * progress).round();
+      setState(() {
+        _displayText = _typewriterText.substring(0, targetLength);
+      });
+    });
   }
 
   void _startAnimations() {
-    _titleController.forward();
+    _fadeController.forward();
     _backgroundController.repeat();
-    _pulseController.repeat(reverse: true);
+    _logoController.repeat(reverse: true);
+    _buttonController.repeat(reverse: true);
 
-    Future.delayed(const Duration(milliseconds: 800), () {
-      _formController.forward();
+    Future.delayed(const Duration(milliseconds: 600), () {
+      _slideController.forward();
+    });
+
+    Future.delayed(const Duration(milliseconds: 1800), () {
+      _typewriterController.forward();
     });
   }
 
@@ -144,31 +183,44 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
   void _showSnackBar(String message, {bool isSuccess = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Row(
-          children: [
-            Icon(
-              isSuccess ? Icons.check_circle_rounded : Icons.error_rounded,
-              color: Colors.white,
-              size: 20,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                message,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
+        content: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  isSuccess ? Icons.check_circle_outline : Icons.error_outline,
+                  color: Colors.white,
+                  size: 20,
                 ),
               ),
-            ),
-          ],
+              const SizedBox(width: 16),
+              Expanded(
+                child: Text(
+                  message,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
-        backgroundColor: isSuccess ? const Color(0xFF00C851) : const Color(0xFFFF3547),
+        backgroundColor: isSuccess 
+            ? const Color(0xFF10B981) 
+            : const Color(0xFFEF4444),
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        margin: const EdgeInsets.all(20),
         duration: Duration(seconds: isSuccess ? 2 : 3),
-        elevation: 8,
+        elevation: 12,
       ),
     );
   }
@@ -233,266 +285,128 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
 
   @override
   void dispose() {
-    _titleController.dispose();
-    _formController.dispose();
+    _fadeController.dispose();
+    _slideController.dispose();
     _backgroundController.dispose();
     _loadingController.dispose();
-    _pulseController.dispose();
+    _logoController.dispose();
+    _typewriterController.dispose();
+    _buttonController.dispose();
     super.dispose();
   }
 
-  Widget _buildFloatingElements() {
-    final screenSize = MediaQuery.of(context).size;
-    
+  Widget _buildAnimatedBackground() {
     return AnimatedBuilder(
       animation: _backgroundAnimation,
       builder: (context, child) {
-        return Stack(
-          children: [
-            // Sharp geometric shapes floating with colors matching the purple theme
-            Positioned(
-              top: screenSize.height * 0.1 + (40 * _backgroundAnimation.value),
-              left: screenSize.width * 0.05,
-              child: Transform.rotate(
-                angle: _backgroundAnimation.value * 2 * 3.14159,
-                child: Container(
-                  width: 50,
-                  height: 50,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: const Color(0xFFFBBF24).withOpacity(0.3), // Gold/Yellow like your logo
-                    border: Border.all(
-                      color: const Color(0xFFFBBF24),
-                      width: 2,
-                    ),
+        return Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                const Color(0xFF0F0F23),
+                const Color(0xFF1A1A2E),
+                const Color(0xFF16213E),
+                const Color(0xFF0F0F23),
+              ],
+              stops: [
+                0.0 + (_backgroundAnimation.value * 0.1),
+                0.3 + (_backgroundAnimation.value * 0.1),
+                0.7 + (_backgroundAnimation.value * 0.1),
+                1.0 + (_backgroundAnimation.value * 0.1),
+              ],
+            ),
+          ),
+          child: Stack(
+            children: [
+              // Animated dots pattern
+              ...List.generate(12, (index) {
+                final double x = (index % 4) * 0.25 + 0.125;
+                final double y = (index ~/ 4) * 0.33 + 0.16;
+                final double delay = index * 0.5;
+                
+                return AnimatedBuilder(
+                  animation: _backgroundAnimation,
+                  builder: (context, child) {
+                    final animValue = ((_backgroundAnimation.value + delay) % 2.0);
+                    final opacity = (animValue < 1.0) 
+                        ? animValue 
+                        : 2.0 - animValue;
+                    
+                    return Positioned(
+                      left: MediaQuery.of(context).size.width * x,
+                      top: MediaQuery.of(context).size.height * y,
+                      child: Container(
+                        width: 4,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(opacity * 0.3),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    );
+                  },
+                );
+              }),
+              // Gradient overlay for depth
+              Container(
+                decoration: BoxDecoration(
+                  gradient: RadialGradient(
+                    center: const Alignment(0.3, -0.5),
+                    radius: 1.2,
+                    colors: [
+                      const Color(0xFFFBBF24).withOpacity(0.1),
+                      Colors.transparent,
+                    ],
                   ),
                 ),
               ),
-            ),
-            Positioned(
-              top: screenSize.height * 0.3 - (30 * _backgroundAnimation.value),
-              right: screenSize.width * 0.08,
-              child: Transform.rotate(
-                angle: -_backgroundAnimation.value * 1.5 * 3.14159,
-                child: Container(
-                  width: 70,
-                  height: 70,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    color: const Color(0xFFE879F9).withOpacity(0.25), // Light purple/pink
-                    border: Border.all(
-                      color: const Color(0xFFE879F9),
-                      width: 2,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              bottom: screenSize.height * 0.25 + (35 * _backgroundAnimation.value),
-              left: screenSize.width * 0.12,
-              child: Transform.rotate(
-                angle: _backgroundAnimation.value * 1.8 * 3.14159,
-                child: Container(
-                  width: 35,
-                  height: 35,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: const Color(0xFFFBBF24).withOpacity(0.2), // Gold matching logo
-                    border: Border.all(
-                      color: const Color(0xFFFBBF24),
-                      width: 3,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              bottom: screenSize.height * 0.4 - (20 * _backgroundAnimation.value),
-              right: screenSize.width * 0.15,
-              child: Transform.rotate(
-                angle: -_backgroundAnimation.value * 2.2 * 3.14159,
-                child: Container(
-                  width: 45,
-                  height: 45,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(8),
-                    color: const Color(0xFFC084FC).withOpacity(0.3), // Light purple
-                    border: Border.all(
-                      color: const Color(0xFFC084FC),
-                      width: 2,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            // Additional sharp geometric elements with purple theme
-            Positioned(
-              top: screenSize.height * 0.15 - (25 * _backgroundAnimation.value),
-              right: screenSize.width * 0.25,
-              child: Transform.rotate(
-                angle: _backgroundAnimation.value * 3 * 3.14159,
-                child: Container(
-                  width: 30,
-                  height: 30,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFA855F7).withOpacity(0.25), // Medium purple
-                    border: Border.all(
-                      color: const Color(0xFFA855F7),
-                      width: 2,
-                    ),
-                  ),
-                  transform: Matrix4.rotationZ(0.785398), // 45 degrees for diamond shape
-                ),
-              ),
-            ),
-            Positioned(
-              bottom: screenSize.height * 0.15 + (45 * _backgroundAnimation.value),
-              right: screenSize.width * 0.05,
-              child: Transform.rotate(
-                angle: -_backgroundAnimation.value * 1.2 * 3.14159,
-                child: Container(
-                  width: 25,
-                  height: 25,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: const Color(0xFFF3E8FF).withOpacity(0.3), // Very light purple
-                    border: Border.all(
-                      color: const Color(0xFFF3E8FF),
-                      width: 2,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
+            ],
+          ),
         );
       },
     );
   }
 
-  Widget _buildTitleSection() {
-    final screenSize = MediaQuery.of(context).size;
-    final isSmallScreen = screenSize.height < 700;
-    final isLandscape = screenSize.width > screenSize.height;
-    
+  Widget _buildLogo() {
     return AnimatedBuilder(
-      animation: _titleController,
+      animation: _logoController,
       builder: (context, child) {
         return Transform.scale(
-          scale: _titleScaleAnimation.value,
-          child: Opacity(
-            opacity: _titleOpacityAnimation.value,
+          scale: _logoScaleAnimation.value,
+          child: Transform.rotate(
+            angle: _logoRotationAnimation.value,
             child: Container(
-              margin: EdgeInsets.only(
-                top: isLandscape ? 20 : (isSmallScreen ? 30 : 50),
-              ),
-              child: Column(
-                children: [
-                  // Logo with pulse animation
-                  AnimatedBuilder(
-                    animation: _pulseAnimation,
-                    builder: (context, child) {
-                      return Transform.scale(
-                        scale: _pulseAnimation.value,
-                        child: Container(
-                          width: isSmallScreen ? 80 : 100,
-                          height: isSmallScreen ? 80 : 100,
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [
-                                Color(0xFFFBBF24), // Yellow/Gold
-                                Color(0xFFF59E0B), // Amber
-                              ],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            borderRadius: BorderRadius.circular(24),
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(0xFFFBBF24).withOpacity(0.4),
-                                blurRadius: 25,
-                                spreadRadius: 3,
-                                offset: const Offset(0, 10),
-                              ),
-                            ],
-                          ),
-                          child: Icon(
-                            Icons.grid_3x3_rounded,
-                            size: isSmallScreen ? 40 : 50,
-                            color: Colors.white,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                  SizedBox(height: isSmallScreen ? 16 : 24),
-                  // App name
-                  ShaderMask(
-                    shaderCallback: (bounds) => const LinearGradient(
-                      colors: [
-                        Color(0xFFFBBF24), // Gold
-                        Color(0xFFF59E0B), // Amber
-                        Color(0xFFEAB308), // Yellow
-                      ],
-                    ).createShader(bounds),
-                    child: Text(
-                      'MEGA X/O',
-                      style: TextStyle(
-                        fontSize: isSmallScreen ? 36 : 44,
-                        fontWeight: FontWeight.w900,
-                        color: Colors.white,
-                        letterSpacing: 2,
-                      ),
-                    ),
-                  ),
-                  SizedBox(height: isSmallScreen ? 8 : 12),
-                  // Subtitle
-                  Text(
-                    'Ultimate Tic Tac Toe Experience',
-                    style: TextStyle(
-                      fontSize: isSmallScreen ? 14 : 16,
-                      fontWeight: FontWeight.w400,
-                      color: Colors.white.withOpacity(0.8),
-                      letterSpacing: 1,
-                    ),
-                  ),
-                  SizedBox(height: isSmallScreen ? 20 : 30),
-                  // Welcome badge
-                  Container(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: isSmallScreen ? 20 : 24,
-                      vertical: isSmallScreen ? 8 : 10,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2), // Solid background instead of gradient
-                      borderRadius: BorderRadius.circular(25),
-                      border: Border.all(
-                        color: Colors.white.withOpacity(0.4),
-                        width: 1,
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.waving_hand_rounded,
-                          size: isSmallScreen ? 16 : 18,
-                          color: Colors.white.withOpacity(0.9),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Welcome Back',
-                          style: TextStyle(
-                            fontSize: isSmallScreen ? 14 : 16,
-                            color: Colors.white.withOpacity(0.9),
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
+              width: 120,
+              height: 120,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [
+                    Color(0xFFFBBF24), // Yellow/Gold
+                    Color(0xFFF59E0B), // Amber
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(32),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFFBBF24).withOpacity(0.4),
+                    blurRadius: 32,
+                    spreadRadius: 4,
+                    offset: const Offset(0, 16),
                   ),
                 ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(32),
+                child: Image.asset(
+                  'assets/icon.png', // Ganti dengan path gambar logo Anda
+                  width: 120,
+                  height: 120,
+                  fit: BoxFit.cover,
+                ),
               ),
             ),
           ),
@@ -501,309 +415,407 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     );
   }
 
-  Widget _buildGoogleLoginButton() {
-    final screenSize = MediaQuery.of(context).size;
-    final isSmallScreen = screenSize.height < 700;
-    
-    return Container(
-      width: double.infinity,
-      height: isSmallScreen ? 54 : 60,
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [
-            Color(0xFF4285F4), // Google Blue
-            Color(0xFF1976D2), // Dark Blue
-          ],
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-        ),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF4285F4).withOpacity(0.4),
-            blurRadius: 20,
-            spreadRadius: 1,
-            offset: const Offset(0, 8),
+  Widget _buildHeader() {
+    return FadeTransition(
+      opacity: _fadeAnimation,
+      child: Column(
+        children: [
+          _buildLogo(),
+          const SizedBox(height: 32),
+          ShaderMask(
+            shaderCallback: (bounds) => const LinearGradient(
+              colors: [
+                Color(0xFFFBBF24), // Gold
+                Color(0xFFF59E0B), // Amber
+                Color(0xFFEAB308), // Yellow
+              ],
+            ).createShader(bounds),
+            child: const Text(
+              'MEGA X/O',
+              style: TextStyle(
+                fontSize: 48,
+                fontWeight: FontWeight.w900,
+                color: Colors.white,
+                letterSpacing: -1,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          // Typewriter animation text
+          SizedBox(
+            height: 24,
+            child: AnimatedBuilder(
+              animation: _typewriterAnimation,
+              builder: (context, child) {
+                return Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      _displayText,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.white.withOpacity(0.7),
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    // Blinking cursor
+                    if (_typewriterAnimation.value < 1.0 || 
+                        (_typewriterAnimation.value == 1.0 && 
+                         DateTime.now().millisecondsSinceEpoch % 1000 < 500))
+                      Container(
+                        width: 2,
+                        height: 20,
+                        margin: const EdgeInsets.only(left: 2),
+                        color: const Color(0xFFFBBF24),
+                      ),
+                  ],
+                );
+              },
+            ),
           ),
         ],
       ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: _isLoading ? null : _loginWithGoogle,
-          borderRadius: BorderRadius.circular(16),
-          child: Container(
-            alignment: Alignment.center,
-            child: _isLoading
-                ? AnimatedBuilder(
-                    animation: _loadingAnimation,
-                    builder: (context, child) {
-                      return Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Transform.rotate(
-                            angle: _loadingAnimation.value * 2 * 3.14159,
-                            child: SizedBox(
-                              width: isSmallScreen ? 20 : 22,
-                              height: isSmallScreen ? 20 : 22,
-                              child: const CircularProgressIndicator(
-                                strokeWidth: 2.5,
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  Colors.white,
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Text(
-                            'Signing In...',
-                            style: TextStyle(
-                              fontSize: isSmallScreen ? 16 : 18,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ],
-                      );
-                    },
-                  )
-                : Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      // Custom Google logo using path
-                      Container(
-                        width: isSmallScreen ? 24 : 28,
-                        height: isSmallScreen ? 24 : 28,
-                        decoration: const BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Center(
-                          child: Text(
-                            'G',
-                            style: TextStyle(
-                              fontSize: isSmallScreen ? 16 : 18,
-                              fontWeight: FontWeight.bold,
-                              color: const Color(0xFF4285F4),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Text(
-                        'Sign in with Google',
-                        style: TextStyle(
-                          fontSize: isSmallScreen ? 16 : 18,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                    ],
-                  ),
-          ),
-        ),
-      ),
     );
   }
 
-  Widget _buildLoginForm() {
-    final screenSize = MediaQuery.of(context).size;
-    final isSmallScreen = screenSize.height < 700;
-    final isLandscape = screenSize.width > screenSize.height;
-    
+  Widget _buildGoogleButton() {
     return AnimatedBuilder(
-      animation: _formController,
+      animation: _buttonController,
       builder: (context, child) {
-        return Transform.translate(
-          offset: Offset(0, _formSlideAnimation.value),
-          child: Opacity(
-            opacity: _formOpacityAnimation.value,
-            child: Container(
-              margin: EdgeInsets.all(isSmallScreen ? 20 : 28),
-              padding: EdgeInsets.all(isSmallScreen ? 28 : 36),
-              constraints: BoxConstraints(
-                maxWidth: isLandscape ? 420 : double.infinity,
+        return Transform.scale(
+          scale: _buttonScaleAnimation.value,
+          child: Container(
+            width: double.infinity,
+            height: 64,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  const Color(0xFFFFFFFF),
+                  const Color(0xFFF8FAFC),
+                ],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
               ),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.15), // Solid background instead of gradient
-                borderRadius: BorderRadius.circular(28),
-                border: Border.all(
-                  color: Colors.white.withOpacity(0.3),
-                  width: 1,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 24,
+                  spreadRadius: 0,
+                  offset: const Offset(0, 8),
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
-                    blurRadius: 30,
-                    spreadRadius: 5,
-                    offset: const Offset(0, 15),
-                  ),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Sign in title
-                  Text(
-                    'Get Started',
-                    style: TextStyle(
-                      fontSize: isSmallScreen ? 28 : 32,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                      letterSpacing: 1,
-                    ),
-                  ),
-                  SizedBox(height: isSmallScreen ? 8 : 12),
-                  Text(
-                    'Sign in to access your game progress',
-                    style: TextStyle(
-                      fontSize: isSmallScreen ? 14 : 16,
-                      color: Colors.white.withOpacity(0.7),
-                      fontWeight: FontWeight.w400,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  // Divider
-                  Container(
-                    margin: EdgeInsets.symmetric(
-                      vertical: isSmallScreen ? 24 : 32,
-                    ),
-                    height: 3,
-                    width: 80,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFBBF24), // Solid color instead of gradient
-                      borderRadius: BorderRadius.circular(1.5),
-                    ),
-                  ),
-                  // Google login button
-                  _buildGoogleLoginButton(),
-                  SizedBox(height: isSmallScreen ? 20 : 28),
-                  // Privacy policy
-                  TextButton(
-                    onPressed: () => _launchURL('https://megaxo-dev.lightcodedigital.cloud'),
-                    style: TextButton.styleFrom(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: isSmallScreen ? 16 : 20,
-                        vertical: isSmallScreen ? 8 : 12,
-                      ),
-                      backgroundColor: Colors.white.withOpacity(0.1), // Solid background
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.privacy_tip_outlined,
-                          size: isSmallScreen ? 16 : 18,
-                          color: Colors.white.withOpacity(0.8),
+                // Glowing effect
+                BoxShadow(
+                  color: const Color(0xFF4285F4).withOpacity(_buttonGlowAnimation.value * 0.3),
+                  blurRadius: 32,
+                  spreadRadius: 0,
+                  offset: const Offset(0, 0),
+                ),
+              ],
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: _isLoading ? null : _loginWithGoogle,
+                borderRadius: BorderRadius.circular(20),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: _isLoading
+                      ? AnimatedBuilder(
+                          animation: _loadingAnimation,
+                          builder: (context, child) {
+                            return Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 3,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      const Color(0xFF4285F4).withOpacity(0.8),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 16),
+                                const Text(
+                                  'Signing you in...',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF374151),
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
+                        )
+                      : Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            // Google Logo with correct colors
+                            Container(
+                              width: 32,
+                              height: 32,
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(8),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.1),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: CustomPaint(
+                                size: const Size(20, 20),
+                                painter: GoogleLogoPainter(),
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            const Text(
+                              'Continue with Google',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF374151),
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Privacy Policy',
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.8),
-                            fontSize: isSmallScreen ? 14 : 16,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ),
         );
       },
+    );
+  }
+
+  Widget _buildLoginCard() {
+    return SlideTransition(
+      position: _slideAnimation,
+      child: FadeTransition(
+        opacity: _fadeAnimation,
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 24),
+          padding: const EdgeInsets.all(32),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.05),
+            borderRadius: BorderRadius.circular(32),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.1),
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.2),
+                blurRadius: 40,
+                spreadRadius: 0,
+                offset: const Offset(0, 20),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      const Color(0xFFFBBF24).withOpacity(0.2),
+                      const Color(0xFFF59E0B).withOpacity(0.2),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: const Color(0xFFFBBF24).withOpacity(0.3),
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.rocket_launch_rounded,
+                      size: 20,
+                      color: Colors.white.withOpacity(0.9),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Get Started',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white.withOpacity(0.9),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 32),
+              const Text(
+                'Ready to Play?',
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Sign in to save your progress and compete with players worldwide',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w400,
+                  color: Colors.white.withOpacity(0.6),
+                  height: 1.4,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 40),
+              _buildGoogleButton(),
+              const SizedBox(height: 24),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final screenSize = MediaQuery.of(context).size;
-    final isLandscape = screenSize.width > screenSize.height;
+    final size = MediaQuery.of(context).size;
+    final isLandscape = size.width > size.height;
     
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              Color(0xFF4C1D95), // Dark Purple
-              Color(0xFF312E81), // Deep Purple
-              Color(0xFF1F2937), // Dark Gray
-              Color(0xFF111827), // Very Dark Gray/Black
-            ],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
+      body: Stack(
+        children: [
+          _buildAnimatedBackground(),
+          SafeArea(
+            child: isLandscape
+                ? _buildLandscapeLayout()
+                : _buildPortraitLayout(),
           ),
-        ),
-        child: SafeArea(
-          child: isLandscape
-              ? _buildLandscapeLayout()
-              : _buildPortraitLayout(),
-        ),
+        ],
       ),
     );
   }
 
   Widget _buildPortraitLayout() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              minHeight: constraints.maxHeight,
-            ),
-            child: IntrinsicHeight(
-              child: Stack(
-                children: [
-                  _buildFloatingElements(),
-                  Column(
-                    children: [
-                      _buildTitleSection(),
-                      const Spacer(),
-                      _buildLoginForm(),
-                      const SizedBox(height: 20),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
+    return Column(
+      children: [
+        const SizedBox(height: 60),
+        _buildHeader(),
+        const Spacer(),
+        _buildLoginCard(),
+        const SizedBox(height: 40),
+      ],
     );
   }
 
   Widget _buildLandscapeLayout() {
-    return SingleChildScrollView(
-      physics: const BouncingScrollPhysics(),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
-        child: Stack(
-          children: [
-            _buildFloatingElements(),
-            Row(
-              children: [
-                Expanded(
-                  flex: 1,
-                  child: _buildTitleSection(),
-                ),
-                Expanded(
-                  flex: 1,
-                  child: Center(
-                    child: _buildLoginForm(),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 40),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 1,
+            child: Center(child: _buildHeader()),
+          ),
+          Expanded(
+            flex: 1,
+            child: Center(child: _buildLoginCard()),
+          ),
+        ],
       ),
     );
   }
+}
+
+// Custom Painter untuk Google Logo dengan warna yang benar
+class GoogleLogoPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..style = PaintingStyle.fill;
+
+    // Google "G" path
+    final path = Path();
+    
+    // Blue part (left)
+    paint.color = const Color(0xFF4285F4);
+    path.moveTo(size.width * 0.5, size.height * 0.1);
+    path.lineTo(size.width * 0.9, size.height * 0.1);
+    path.lineTo(size.width * 0.9, size.height * 0.4);
+    path.lineTo(size.width * 0.6, size.height * 0.4);
+    path.lineTo(size.width * 0.6, size.width * 0.6);
+    path.lineTo(size.width * 0.9, size.height * 0.6);
+    path.lineTo(size.width * 0.9, size.height * 0.9);
+    path.lineTo(size.width * 0.5, size.height * 0.9);
+    path.arcToPoint(
+      Offset(size.width * 0.1, size.height * 0.5),
+      radius: Radius.circular(size.width * 0.4),
+      clockwise: false,
+    );
+    path.arcToPoint(
+      Offset(size.width * 0.5, size.height * 0.1),
+      radius: Radius.circular(size.width * 0.4),
+      clockwise: false,
+    );
+    canvas.drawPath(path, paint);
+
+    // Red part (top-right curve)
+    paint.color = const Color(0xFFEA4335);
+    final redPath = Path();
+    redPath.moveTo(size.width * 0.5, size.height * 0.1);
+    redPath.arcToPoint(
+      Offset(size.width * 0.85, size.height * 0.25),
+      radius: Radius.circular(size.width * 0.4),
+      clockwise: true,
+    );
+    redPath.lineTo(size.width * 0.75, size.height * 0.35);
+    redPath.arcToPoint(
+      Offset(size.width * 0.5, size.height * 0.25),
+      radius: Radius.circular(size.width * 0.25),
+      clockwise: false,
+    );
+    redPath.close();
+    canvas.drawPath(redPath, paint);
+
+    // Yellow part (bottom-left curve)
+    paint.color = const Color(0xFFFBBC05);
+    final yellowPath = Path();
+    yellowPath.moveTo(size.width * 0.15, size.height * 0.75);
+    yellowPath.arcToPoint(
+      Offset(size.width * 0.5, size.height * 0.9),
+      radius: Radius.circular(size.width * 0.4),
+      clockwise: true,
+    );
+    yellowPath.lineTo(size.width * 0.5, size.height * 0.75);
+    yellowPath.arcToPoint(
+      Offset(size.width * 0.25, size.height * 0.65),
+      radius: Radius.circular(size.width * 0.25),
+      clockwise: false,
+    );
+    yellowPath.close();
+    canvas.drawPath(yellowPath, paint);
+
+    // Green part (bottom-right)
+    paint.color = const Color(0xFF34A853);
+    final greenRect = Rect.fromLTWH(
+      size.width * 0.5, 
+      size.height * 0.6, 
+      size.width * 0.4, 
+      size.height * 0.3
+    );
+    canvas.drawRect(greenRect, paint);
+  }
+
+  @override
+  bool shouldRepaint(CustomPainter oldDelegate) => false;
 }
