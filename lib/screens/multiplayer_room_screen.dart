@@ -22,9 +22,7 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
   bool isInitialized = false;
   String userDisplayName = "USER";
   bool _hasNavigated = false;
-  
 
-  // Animation controllers
   late AnimationController _pulseController;
   late AnimationController _rotationController;
   late AnimationController _fadeController;
@@ -44,13 +42,10 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
 
   void _initializeService() async {
     try {
-      // Initialize PocketBase service if not already done
       if (!isInitialized) {
         await pbService.init();
         isInitialized = true;
       }
-
-      // Check authentication status
       _checkAuth();
     } catch (e) {
       print("Error initializing service: $e");
@@ -60,9 +55,7 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
 
   void _checkAuth() async {
     try {
-      // Check if user is logged in using the updated method
       final isLoggedIn = await pbService.isUserLoggedIn();
-      
       if (!isLoggedIn) {
         _showMessage("Sesi login expired, silakan login ulang", isError: true);
         Future.delayed(const Duration(seconds: 2), () {
@@ -73,11 +66,12 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
         return;
       }
 
-      // Get user info for display
       final userInfo = await pbService.getUserInfo();
-      setState(() {
-        userDisplayName = userInfo['name'] ?? userInfo['email'] ?? "Unknown User";
-      });
+      if (mounted) {
+        setState(() {
+          userDisplayName = userInfo['name'] ?? userInfo['email'] ?? "Unknown User";
+        });
+      }
 
       print("Current user: ${pbService.getCurrentUserInfo()}");
     } catch (e) {
@@ -141,7 +135,6 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
     _fadeController.dispose();
     _scaleController.dispose();
 
-    // Unsubscribe dari realtime jika masih aktif
     if (roomId != null) {
       try {
         pbService.pb.then((pb) => pb.collection('rooms').unsubscribe(roomId!));
@@ -153,12 +146,10 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
     super.dispose();
   }
 
-  /// Buat room baru - UPDATED dengan field room status
   Future<void> createRoom() async {
     if (isWaiting) return;
 
     try {
-      // Ensure we're authenticated before creating room
       final isLoggedIn = await pbService.isUserLoggedIn();
       if (!isLoggedIn) {
         throw Exception("Sesi login expired, silakan login ulang");
@@ -168,13 +159,11 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
         isWaiting = true;
       });
 
-      // Generate kode room 6 digit
       final code = (Random().nextInt(900000) + 100000).toString();
 
       print("Creating room with code: $code");
       print("Player X (Creator): ${pbService.getCurrentUserInfo()}");
 
-      // Initialize with proper Ultimate Tic-Tac-Toe structure
       final emptySmallBoards = List.generate(9, (index) => List.filled(9, ''));
       final emptyBigBoard = List.filled(9, '');
 
@@ -192,13 +181,12 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
           'currentTurn': 'X',
           'activeBoard': -1,
           'createdBy': pbService.userId,
-          // ✨ NEW: Initialize room status tracking fields
-          'playerXInRoom': true, // Creator is in room
-          'playerOInRoom': false, // No player O yet
+          'playerXInRoom': true,
+          'playerOInRoom': false,
           'playerXLastSeen': DateTime.now().toIso8601String(),
-          'playerOLastSeen': null, // No player O yet
-          'playerXLeftAt': null, // Not left yet
-          'playerOLeftAt': null, // No player O yet
+          'playerOLastSeen': null,
+          'playerXLeftAt': null,
+          'playerOLeftAt': null,
         },
       );
 
@@ -206,12 +194,10 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
       roomId = room.id;
 
       print("Room created successfully: $roomId");
-      print("✅ Room status fields initialized:");
       print("- playerXInRoom: true");
       print("- playerOInRoom: false");
       print("- playerXLastSeen: ${DateTime.now().toIso8601String()}");
 
-      // Dengarkan jika ada playerO join
       _listenForOpponent();
 
       setState(() {});
@@ -224,79 +210,72 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
     }
   }
 
-  /// Tunggu lawan join (Realtime)
-void _listenForOpponent() async {
-  if (roomId == null) return;
+  void _listenForOpponent() async {
+    if (roomId == null) return;
 
-  print("Listening for opponent in room: $roomId");
+    print("Listening for opponent in room: $roomId");
 
-  try {
-    final pb = await pbService.pb;
-    pb.collection('rooms').subscribe(roomId!, (e) {
-      if (!mounted || _hasNavigated) return; // Prevent duplicate navigation
+    try {
+      final pb = await pbService.pb;
+      pb.collection('rooms').subscribe(roomId!, (e) {
+        if (!mounted || _hasNavigated) return;
 
-      print("Realtime event: ${e.action}");
+        print("Realtime event: ${e.action}");
 
-      if (e.action == 'update') {
-        final r = e.record;
-        print("Room updated: ${r?.data}");
+        if (e.action == 'update') {
+          final r = e.record;
+          print("Room updated: ${r?.data}");
 
-        if (r?.data['playerO'] != null && 
-            r?.data['playerO'] != '' && 
-            !_hasNavigated) {
-          print("Opponent joined! PlayerO: ${r?.data['playerOName']}");
-          
-          // Set flag to prevent duplicate navigation
-          _hasNavigated = true;
+          if (r?.data['playerO'] != null && 
+              r?.data['playerO'] != '' && 
+              !_hasNavigated) {
+            print("Opponent joined! PlayerO: ${r?.data['playerOName']}");
+            
+            _hasNavigated = true;
 
-          // Unsubscribe before navigate
-          pb.collection('rooms').unsubscribe(roomId!);
+            pb.collection('rooms').unsubscribe(roomId!);
 
-          // Use a small delay to ensure state is consistent
-          Future.delayed(const Duration(milliseconds: 100), () {
-            if (mounted) {
-              Navigator.pushReplacement(
-                context,
-                PageRouteBuilder(
-                  pageBuilder: (context, animation, secondaryAnimation) =>
-                      MultiplayerGameScreen(roomId: roomId!, isPlayerX: true),
-                  transitionsBuilder:
-                      (context, animation, secondaryAnimation, child) {
-                        return SlideTransition(
-                          position: animation.drive(
-                            Tween(
-                              begin: const Offset(1.0, 0.0),
-                              end: Offset.zero,
-                            ).chain(CurveTween(curve: Curves.easeInOut)),
-                          ),
-                          child: child,
-                        );
-                      },
-                ),
-              );
-            }
-          });
+            Future.delayed(const Duration(milliseconds: 100), () {
+              if (mounted) {
+                Navigator.pushReplacement(
+                  context,
+                  PageRouteBuilder(
+                    pageBuilder: (context, animation, secondaryAnimation) =>
+                        MultiplayerGameScreen(roomId: roomId!, isPlayerX: true),
+                    transitionsBuilder:
+                        (context, animation, secondaryAnimation, child) {
+                      return SlideTransition(
+                        position: animation.drive(
+                          Tween(
+                            begin: const Offset(1.0, 0.0),
+                            end: Offset.zero,
+                          ).chain(CurveTween(curve: Curves.easeInOut)),
+                        ),
+                        child: child,
+                      );
+                    },
+                  ),
+                );
+              }
+            });
+          }
         }
-      }
-    });
-  } catch (e) {
-    print("Error listening for opponent: $e");
-    _showMessage("Error listening for opponent: $e", isError: true);
+      });
+    } catch (e) {
+      print("Error listening for opponent: $e");
+      _showMessage("Error listening for opponent: $e", isError: true);
+    }
   }
-}
 
-  /// Join room berdasarkan roomCode - UPDATED dengan field room status
   Future<void> joinRoom(String code) async {
     if (isWaiting) return;
 
     try {
-      // Ensure we're authenticated before joining room
       final isLoggedIn = await pbService.isUserLoggedIn();
       if (!isLoggedIn) {
         throw Exception("Sesi login expired, silakan login ulang");
       }
 
-      // Validasi kode minimal 4 digit, maksimal 6
       if (code.length < 4) {
         throw Exception("Kode room minimal 4 digit");
       }
@@ -308,19 +287,16 @@ void _listenForOpponent() async {
       print("Trying to join room with code: $code");
       print("Player O (Joiner): ${pbService.getCurrentUserInfo()}");
 
-      // Use proper filter syntax
       final filterQuery = "roomCode='$code' && status='waiting'";
 
       print("Filter query: $filterQuery");
 
       final pb = await pbService.pb;
-      // Cari room berdasarkan roomCode dan status waiting
       final rooms = await pb.collection('rooms').getList(filter: filterQuery, perPage: 1);
 
       print("Rooms found: ${rooms.items.length}");
 
       if (rooms.items.isEmpty) {
-        // Coba cari room dengan kode yang sama tapi status berbeda
         print("No waiting rooms found, checking for any rooms with this code...");
 
         final allRoomsQuery = "roomCode='$code'";
@@ -347,12 +323,10 @@ void _listenForOpponent() async {
       final room = rooms.items.first;
       print("Found waiting room: ${room.id}");
 
-      // User tidak join room sendiri
       if (room.data['playerX'] == pbService.userId) {
         throw Exception("Kamu tidak bisa join room yang kamu buat sendiri");
       }
 
-      // Room belum ada playerO
       final currentPlayerO = room.data['playerO'];
       if (currentPlayerO != null && currentPlayerO.toString().isNotEmpty) {
         throw Exception("Room sudah penuh");
@@ -360,26 +334,22 @@ void _listenForOpponent() async {
 
       print("Joining room: ${room.id}");
 
-      // Update room dengan playerO - UPDATED dengan field room status
       await pb.collection('rooms').update(
         room.id,
         body: {
           'playerO': pbService.userId,
           'playerOName': pbService.username ?? userDisplayName,
           'status': 'playing',
-          // ✨ NEW: Initialize room status for playerO
-          'playerOInRoom': true, // Joiner is now in room
+          'playerOInRoom': true,
           'playerOLastSeen': DateTime.now().toIso8601String(),
-          'playerOLeftAt': null, // Not left yet
+          'playerOLeftAt': null,
         },
       );
 
       print("Successfully joined room");
-      print("✅ Player O room status initialized:");
       print("- playerOInRoom: true");
       print("- playerOLastSeen: ${DateTime.now().toIso8601String()}");
 
-      // Navigate ke game screen
       if (mounted) {
         Navigator.pushReplacement(
           context,
@@ -388,16 +358,16 @@ void _listenForOpponent() async {
                 MultiplayerGameScreen(roomId: room.id, isPlayerX: false),
             transitionsBuilder:
                 (context, animation, secondaryAnimation, child) {
-                  return SlideTransition(
-                    position: animation.drive(
-                      Tween(
-                        begin: const Offset(1.0, 0.0),
-                        end: Offset.zero,
-                      ).chain(CurveTween(curve: Curves.easeInOut)),
-                    ),
-                    child: child,
-                  );
-                },
+              return SlideTransition(
+                position: animation.drive(
+                  Tween(
+                    begin: const Offset(1.0, 0.0),
+                    end: Offset.zero,
+                  ).chain(CurveTween(curve: Curves.easeInOut)),
+                ),
+                child: child,
+              );
+            },
           ),
         );
       }
@@ -416,7 +386,6 @@ void _listenForOpponent() async {
         isWaiting = false;
       });
 
-      // Handle specific PocketBase errors
       String errorMessage = "Gagal join room";
       final errorStr = e.toString().toLowerCase();
 
@@ -437,6 +406,7 @@ void _listenForOpponent() async {
   void _showMessage(String msg, {bool isError = false}) {
     if (!mounted) return;
 
+    final screenWidth = MediaQuery.of(context).size.width;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
@@ -444,15 +414,21 @@ void _listenForOpponent() async {
             Icon(
               isError ? Icons.error_outline : Icons.check_circle_outline,
               color: Colors.white,
+              size: screenWidth * 0.06,
             ),
-            const SizedBox(width: 8),
-            Expanded(child: Text(msg)),
+            SizedBox(width: screenWidth * 0.02),
+            Expanded(
+              child: Text(
+                msg,
+                style: TextStyle(fontSize: screenWidth * 0.04),
+              ),
+            ),
           ],
         ),
         backgroundColor: isError ? Colors.red[600] : Colors.green[600],
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(screenWidth * 0.025)),
+        margin: EdgeInsets.all(screenWidth * 0.04),
       ),
     );
   }
@@ -465,83 +441,82 @@ void _listenForOpponent() async {
   }
 
   void _cancelWaiting() async {
-  if (roomId != null) {
-    try {
-      // Set flag to prevent navigation
-      _hasNavigated = true;
-      
-      // Delete room yang sedang menunggu
-      final pb = await pbService.pb;
-      await pb.collection('rooms').delete(roomId!).catchError((e) {
-        print("Error deleting room: $e");
-      });
+    if (roomId != null) {
+      try {
+        _hasNavigated = true;
+        final pb = await pbService.pb;
+        await pb.collection('rooms').delete(roomId!).catchError((e) {
+          print("Error deleting room: $e");
+        });
+        pb.collection('rooms').unsubscribe(roomId!);
+      } catch (e) {
+        print("Error canceling room: $e");
+      }
+    }
 
-      // Unsubscribe
-      pb.collection('rooms').unsubscribe(roomId!);
-    } catch (e) {
-      print("Error canceling room: $e");
+    if (mounted) {
+      setState(() {
+        roomCode = null;
+        roomId = null;
+        isWaiting = false;
+        _hasNavigated = false;
+      });
     }
   }
 
-  setState(() {
-    roomCode = null;
-    roomId = null;
-    isWaiting = false;
-    _hasNavigated = false; // Reset flag
-  });
-}
-
   Widget _buildFloatingElements() {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
     return AnimatedBuilder(
       animation: _rotationController,
       builder: (context, child) {
         return Stack(
           children: [
             Positioned(
-              top: 100 + (20 * sin(_rotationAnimation.value)),
-              left: 40,
+              top: screenHeight * 0.125 + (screenHeight * 0.025 * sin(_rotationAnimation.value)),
+              left: screenWidth * 0.1,
               child: Transform.rotate(
                 angle: _rotationAnimation.value,
                 child: Icon(
                   Icons.games_outlined,
                   color: Colors.white.withOpacity(0.1),
-                  size: 30,
+                  size: screenWidth * 0.075,
                 ),
               ),
             ),
             Positioned(
-              top: 200 - (15 * cos(_rotationAnimation.value)),
-              right: 50,
+              top: screenHeight * 0.25 - (screenHeight * 0.01875 * cos(_rotationAnimation.value)),
+              right: screenWidth * 0.125,
               child: Transform.rotate(
                 angle: -_rotationAnimation.value * 0.8,
                 child: Icon(
                   Icons.sports_esports_outlined,
                   color: Colors.yellow.withOpacity(0.15),
-                  size: 25,
+                  size: screenWidth * 0.0625,
                 ),
               ),
             ),
             Positioned(
-              bottom: 250 + (25 * sin(_rotationAnimation.value * 0.6)),
-              left: 30,
+              bottom: screenHeight * 0.3125 + (screenHeight * 0.03125 * sin(_rotationAnimation.value * 0.6)),
+              left: screenWidth * 0.075,
               child: Transform.rotate(
                 angle: _rotationAnimation.value * 1.5,
                 child: Icon(
                   Icons.group_outlined,
                   color: Colors.white.withOpacity(0.08),
-                  size: 28,
+                  size: screenWidth * 0.07,
                 ),
               ),
             ),
             Positioned(
-              bottom: 350 - (20 * cos(_rotationAnimation.value * 1.2)),
-              right: 40,
+              bottom: screenHeight * 0.4375 - (screenHeight * 0.025 * cos(_rotationAnimation.value * 1.2)),
+              right: screenWidth * 0.1,
               child: Transform.rotate(
                 angle: -_rotationAnimation.value * 0.5,
                 child: Icon(
                   Icons.wifi_outlined,
                   color: Colors.purple.withOpacity(0.12),
-                  size: 22,
+                  size: screenWidth * 0.055,
                 ),
               ),
             ),
@@ -552,6 +527,7 @@ void _listenForOpponent() async {
   }
 
   Widget _buildWaitingScreen() {
+    final screenWidth = MediaQuery.of(context).size.width;
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
@@ -571,11 +547,11 @@ void _listenForOpponent() async {
                   child: ScaleTransition(
                     scale: _scaleAnimation,
                     child: Container(
-                      margin: const EdgeInsets.all(24),
-                      padding: const EdgeInsets.all(32),
+                      margin: EdgeInsets.all(screenWidth * 0.06),
+                      padding: EdgeInsets.all(screenWidth * 0.08),
                       decoration: BoxDecoration(
                         color: Colors.black.withOpacity(0.3),
-                        borderRadius: BorderRadius.circular(24),
+                        borderRadius: BorderRadius.circular(screenWidth * 0.06),
                         border: Border.all(
                           color: Colors.white.withOpacity(0.1),
                           width: 1,
@@ -583,24 +559,23 @@ void _listenForOpponent() async {
                         boxShadow: [
                           BoxShadow(
                             color: Colors.black.withOpacity(0.3),
-                            blurRadius: 20,
-                            spreadRadius: 5,
-                            offset: const Offset(0, 10),
+                            blurRadius: screenWidth * 0.05,
+                            spreadRadius: screenWidth * 0.0125,
+                            offset: Offset(0, screenWidth * 0.025),
                           ),
                         ],
                       ),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          // Animated icon
                           AnimatedBuilder(
                             animation: _pulseAnimation,
                             builder: (context, child) {
                               return Transform.scale(
                                 scale: _pulseAnimation.value,
                                 child: Container(
-                                  width: 80,
-                                  height: 80,
+                                  width: screenWidth * 0.2,
+                                  height: screenWidth * 0.2,
                                   decoration: BoxDecoration(
                                     gradient: const LinearGradient(
                                       colors: [
@@ -608,61 +583,59 @@ void _listenForOpponent() async {
                                         Color(0xFFFFA500),
                                       ],
                                     ),
-                                    borderRadius: BorderRadius.circular(20),
+                                    borderRadius: BorderRadius.circular(screenWidth * 0.05),
                                     boxShadow: [
                                       BoxShadow(
                                         color: Colors.orange.withOpacity(0.4),
-                                        blurRadius: 20,
-                                        spreadRadius: 2,
-                                        offset: const Offset(0, 8),
+                                        blurRadius: screenWidth * 0.05,
+                                        spreadRadius: screenWidth * 0.005,
+                                        offset: Offset(0, screenWidth * 0.02),
                                       ),
                                     ],
                                   ),
-                                  child: const Icon(
+                                  child: Icon(
                                     Icons.hourglass_empty,
-                                    size: 40,
+                                    size: screenWidth * 0.1,
                                     color: Colors.white,
                                   ),
                                 ),
                               );
                             },
                           ),
-                          const SizedBox(height: 24),
-                          const Text(
+                          SizedBox(height: screenWidth * 0.06),
+                          Text(
                             'Waiting for Opponent',
                             style: TextStyle(
-                              fontSize: 24,
+                              fontSize: screenWidth * 0.06,
                               fontWeight: FontWeight.bold,
                               color: Colors.white,
                             ),
                           ),
-                          const SizedBox(height: 8),
+                          SizedBox(height: screenWidth * 0.02),
                           Text(
                             'Share this code with your friend',
                             style: TextStyle(
-                              fontSize: 16,
+                              fontSize: screenWidth * 0.04,
                               color: Colors.white.withOpacity(0.7),
                             ),
                           ),
-                          const SizedBox(height: 32),
-
-                          // Room code display
+                          SizedBox(height: screenWidth * 0.08),
                           Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 24,
-                              vertical: 16,
+                            padding: EdgeInsets.symmetric(
+                              horizontal: screenWidth * 0.06,
+                              vertical: screenWidth * 0.04,
                             ),
                             decoration: BoxDecoration(
                               gradient: const LinearGradient(
                                 colors: [Color(0xFF6A0DAD), Color(0xFF8A2BE2)],
                               ),
-                              borderRadius: BorderRadius.circular(16),
+                              borderRadius: BorderRadius.circular(screenWidth * 0.04),
                               boxShadow: [
                                 BoxShadow(
                                   color: Colors.deepPurple.withOpacity(0.4),
-                                  blurRadius: 15,
-                                  spreadRadius: 1,
-                                  offset: const Offset(0, 6),
+                                  blurRadius: screenWidth * 0.0375,
+                                  spreadRadius: screenWidth * 0.0025,
+                                  offset: Offset(0, screenWidth * 0.015),
                                 ),
                               ],
                             ),
@@ -671,36 +644,34 @@ void _listenForOpponent() async {
                               children: [
                                 Text(
                                   roomCode!,
-                                  style: const TextStyle(
-                                    fontSize: 32,
+                                  style: TextStyle(
+                                    fontSize: screenWidth * 0.08,
                                     fontWeight: FontWeight.bold,
                                     color: Colors.white,
                                     letterSpacing: 4,
                                   ),
                                 ),
-                                const SizedBox(width: 16),
+                                SizedBox(width: screenWidth * 0.04),
                                 IconButton(
                                   onPressed: _copyRoomCode,
-                                  icon: const Icon(
+                                  icon: Icon(
                                     Icons.copy,
                                     color: Colors.white,
-                                    size: 24,
+                                    size: screenWidth * 0.06,
                                   ),
                                 ),
                               ],
                             ),
                           ),
-                          const SizedBox(height: 32),
-
-                          // Loading indicator
+                          SizedBox(height: screenWidth * 0.08),
                           AnimatedBuilder(
                             animation: _rotationController,
                             builder: (context, child) {
                               return Transform.rotate(
                                 angle: _rotationAnimation.value,
-                                child: const SizedBox(
-                                  width: 40,
-                                  height: 40,
+                                child: SizedBox(
+                                  width: screenWidth * 0.1,
+                                  height: screenWidth * 0.1,
                                   child: CircularProgressIndicator(
                                     strokeWidth: 3,
                                     valueColor: AlwaysStoppedAnimation<Color>(
@@ -711,35 +682,33 @@ void _listenForOpponent() async {
                               );
                             },
                           ),
-                          const SizedBox(height: 16),
+                          SizedBox(height: screenWidth * 0.04),
                           Text(
                             'Waiting for player to join...',
                             style: TextStyle(
-                              fontSize: 16,
+                              fontSize: screenWidth * 0.04,
                               color: Colors.white.withOpacity(0.8),
                             ),
                           ),
-                          const SizedBox(height: 24),
-
-                          // Cancel button
+                          SizedBox(height: screenWidth * 0.06),
                           TextButton(
                             onPressed: _cancelWaiting,
                             child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 20,
-                                vertical: 10,
+                              padding: EdgeInsets.symmetric(
+                                horizontal: screenWidth * 0.05,
+                                vertical: screenWidth * 0.025,
                               ),
                               decoration: BoxDecoration(
                                 border: Border.all(
                                   color: Colors.white.withOpacity(0.3),
                                 ),
-                                borderRadius: BorderRadius.circular(12),
+                                borderRadius: BorderRadius.circular(screenWidth * 0.03),
                               ),
                               child: Text(
                                 'Cancel',
                                 style: TextStyle(
                                   color: Colors.white.withOpacity(0.8),
-                                  fontSize: 16,
+                                  fontSize: screenWidth * 0.04,
                                 ),
                               ),
                             ),
@@ -750,20 +719,22 @@ void _listenForOpponent() async {
                   ),
                 ),
               ),
-
-              // Back button
               Positioned(
-                top: 16,
-                left: 16,
+                top: screenWidth * 0.04,
+                left: screenWidth * 0.04,
                 child: IconButton(
                   onPressed: _cancelWaiting,
                   icon: Container(
-                    padding: const EdgeInsets.all(8),
+                    padding: EdgeInsets.all(screenWidth * 0.02),
                     decoration: BoxDecoration(
                       color: Colors.black.withOpacity(0.3),
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(screenWidth * 0.03),
                     ),
-                    child: const Icon(Icons.arrow_back, color: Colors.white),
+                    child: Icon(
+                      Icons.arrow_back,
+                      color: Colors.white,
+                      size: screenWidth * 0.06,
+                    ),
                   ),
                 ),
               ),
@@ -775,6 +746,7 @@ void _listenForOpponent() async {
   }
 
   Widget _buildCreateJoinScreen() {
+    final screenWidth = MediaQuery.of(context).size.width;
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
@@ -796,16 +768,18 @@ void _listenForOpponent() async {
                       MediaQuery.of(context).padding.top,
                   child: Column(
                     children: [
-                      // Header
                       FadeTransition(
                         opacity: _fadeAnimation,
                         child: Container(
-                          margin: const EdgeInsets.only(top: 60, bottom: 40),
+                          margin: EdgeInsets.only(
+                            top: screenWidth * 0.15,
+                            bottom: screenWidth * 0.1,
+                          ),
                           child: Column(
                             children: [
                               Container(
-                                width: 80,
-                                height: 80,
+                                width: screenWidth * 0.2,
+                                height: screenWidth * 0.2,
                                 decoration: BoxDecoration(
                                   gradient: const LinearGradient(
                                     colors: [
@@ -813,27 +787,27 @@ void _listenForOpponent() async {
                                       Color(0xFFFFA500),
                                     ],
                                   ),
-                                  borderRadius: BorderRadius.circular(20),
+                                  borderRadius: BorderRadius.circular(screenWidth * 0.05),
                                   boxShadow: [
                                     BoxShadow(
                                       color: Colors.orange.withOpacity(0.4),
-                                      blurRadius: 20,
-                                      spreadRadius: 2,
-                                      offset: const Offset(0, 8),
+                                      blurRadius: screenWidth * 0.05,
+                                      spreadRadius: screenWidth * 0.005,
+                                      offset: Offset(0, screenWidth * 0.02),
                                     ),
                                   ],
                                 ),
-                                child: const Icon(
+                                child: Icon(
                                   Icons.group_add,
-                                  size: 40,
+                                  size: screenWidth * 0.1,
                                   color: Colors.white,
                                 ),
                               ),
-                              const SizedBox(height: 20),
-                              const Text(
+                              SizedBox(height: screenWidth * 0.05),
+                              Text(
                                 'Multiplayer',
                                 style: TextStyle(
-                                  fontSize: 32,
+                                  fontSize: screenWidth * 0.08,
                                   fontWeight: FontWeight.bold,
                                   color: Colors.white,
                                   letterSpacing: 2,
@@ -842,24 +816,24 @@ void _listenForOpponent() async {
                               Text(
                                 'Create or join a room to play',
                                 style: TextStyle(
-                                  fontSize: 16,
+                                  fontSize: screenWidth * 0.04,
                                   color: Colors.white.withOpacity(0.7),
                                 ),
                               ),
-                              const SizedBox(height: 8),
+                              SizedBox(height: screenWidth * 0.02),
                               Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 6,
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: screenWidth * 0.03,
+                                  vertical: screenWidth * 0.015,
                                 ),
                                 decoration: BoxDecoration(
                                   color: Colors.black.withOpacity(0.3),
-                                  borderRadius: BorderRadius.circular(12),
+                                  borderRadius: BorderRadius.circular(screenWidth * 0.03),
                                 ),
                                 child: Text(
                                   "Welcome, $userDisplayName",
                                   style: TextStyle(
-                                    fontSize: 12,
+                                    fontSize: screenWidth * 0.03,
                                     color: Colors.white.withOpacity(0.8),
                                   ),
                                 ),
@@ -868,18 +842,15 @@ void _listenForOpponent() async {
                           ),
                         ),
                       ),
-
                       const Spacer(),
-
-                      // Main content
                       ScaleTransition(
                         scale: _scaleAnimation,
                         child: Container(
-                          margin: const EdgeInsets.all(24),
-                          padding: const EdgeInsets.all(32),
+                          margin: EdgeInsets.all(screenWidth * 0.06),
+                          padding: EdgeInsets.all(screenWidth * 0.08),
                           decoration: BoxDecoration(
                             color: Colors.black.withOpacity(0.3),
-                            borderRadius: BorderRadius.circular(24),
+                            borderRadius: BorderRadius.circular(screenWidth * 0.06),
                             border: Border.all(
                               color: Colors.white.withOpacity(0.1),
                               width: 1,
@@ -887,19 +858,18 @@ void _listenForOpponent() async {
                             boxShadow: [
                               BoxShadow(
                                 color: Colors.black.withOpacity(0.3),
-                                blurRadius: 20,
-                                spreadRadius: 5,
-                                offset: const Offset(0, 10),
+                                blurRadius: screenWidth * 0.05,
+                                spreadRadius: screenWidth * 0.0125,
+                                offset: Offset(0, screenWidth * 0.025),
                               ),
                             ],
                           ),
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              // Create Room Button
                               Container(
                                 width: double.infinity,
-                                height: 56,
+                                height: screenWidth * 0.14,
                                 decoration: BoxDecoration(
                                   gradient: const LinearGradient(
                                     colors: [
@@ -907,13 +877,13 @@ void _listenForOpponent() async {
                                       Color(0xFF8A2BE2),
                                     ],
                                   ),
-                                  borderRadius: BorderRadius.circular(16),
+                                  borderRadius: BorderRadius.circular(screenWidth * 0.04),
                                   boxShadow: [
                                     BoxShadow(
                                       color: Colors.deepPurple.withOpacity(0.4),
-                                      blurRadius: 15,
-                                      spreadRadius: 1,
-                                      offset: const Offset(0, 6),
+                                      blurRadius: screenWidth * 0.0375,
+                                      spreadRadius: screenWidth * 0.0025,
+                                      offset: Offset(0, screenWidth * 0.015),
                                     ),
                                   ],
                                 ),
@@ -921,35 +891,35 @@ void _listenForOpponent() async {
                                   color: Colors.transparent,
                                   child: InkWell(
                                     onTap: isWaiting ? null : createRoom,
-                                    borderRadius: BorderRadius.circular(16),
+                                    borderRadius: BorderRadius.circular(screenWidth * 0.04),
                                     child: Container(
                                       alignment: Alignment.center,
                                       child: isWaiting
-                                          ? const SizedBox(
-                                              width: 24,
-                                              height: 24,
-                                              child: CircularProgressIndicator(
+                                          ? SizedBox(
+                                              width: screenWidth * 0.06,
+                                              height: screenWidth * 0.06,
+                                              child: const CircularProgressIndicator(
                                                 strokeWidth: 2,
                                                 valueColor:
-                                                    AlwaysStoppedAnimation<
-                                                      Color
-                                                    >(Colors.white),
+                                                    AlwaysStoppedAnimation<Color>(
+                                                  Colors.white,
+                                                ),
                                               ),
                                             )
-                                          : const Row(
+                                          : Row(
                                               mainAxisAlignment:
                                                   MainAxisAlignment.center,
                                               children: [
                                                 Icon(
                                                   Icons.add_circle_outline,
                                                   color: Colors.white,
-                                                  size: 24,
+                                                  size: screenWidth * 0.06,
                                                 ),
-                                                SizedBox(width: 12),
+                                                SizedBox(width: screenWidth * 0.03),
                                                 Text(
                                                   'Create Room',
                                                   style: TextStyle(
-                                                    fontSize: 18,
+                                                    fontSize: screenWidth * 0.045,
                                                     fontWeight: FontWeight.bold,
                                                     color: Colors.white,
                                                   ),
@@ -960,11 +930,9 @@ void _listenForOpponent() async {
                                   ),
                                 ),
                               ),
-
-                              // Divider
                               Container(
-                                margin: const EdgeInsets.symmetric(
-                                  vertical: 24,
+                                margin: EdgeInsets.symmetric(
+                                  vertical: screenWidth * 0.06,
                                 ),
                                 child: Row(
                                   children: [
@@ -975,14 +943,15 @@ void _listenForOpponent() async {
                                       ),
                                     ),
                                     Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 16,
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: screenWidth * 0.04,
                                       ),
                                       child: Text(
                                         'OR',
                                         style: TextStyle(
                                           color: Colors.white.withOpacity(0.6),
                                           fontWeight: FontWeight.w500,
+                                          fontSize: screenWidth * 0.04,
                                         ),
                                       ),
                                     ),
@@ -995,13 +964,11 @@ void _listenForOpponent() async {
                                   ],
                                 ),
                               ),
-
-                              // Room Code Input
                               TextField(
                                 controller: roomCodeController,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   color: Colors.white,
-                                  fontSize: 16,
+                                  fontSize: screenWidth * 0.04,
                                   letterSpacing: 2,
                                 ),
                                 textAlign: TextAlign.center,
@@ -1009,70 +976,68 @@ void _listenForOpponent() async {
                                 maxLength: 6,
                                 enabled: !isWaiting,
                                 onChanged: (value) {
-                                  // Trigger rebuild untuk update button state
                                   setState(() {});
                                 },
                                 decoration: InputDecoration(
                                   hintText: 'Enter Room Code',
                                   hintStyle: TextStyle(
                                     color: Colors.white.withOpacity(0.6),
+                                    fontSize: screenWidth * 0.04,
                                   ),
                                   filled: true,
                                   fillColor: Colors.white.withOpacity(0.1),
                                   border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(16.0),
+                                    borderRadius: BorderRadius.circular(screenWidth * 0.04),
                                     borderSide: BorderSide(
                                       color: Colors.white.withOpacity(0.2),
                                       width: 1,
                                     ),
                                   ),
                                   enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(16.0),
+                                    borderRadius: BorderRadius.circular(screenWidth * 0.04),
                                     borderSide: BorderSide(
                                       color: Colors.white.withOpacity(0.2),
                                       width: 1,
                                     ),
                                   ),
                                   focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(16.0),
+                                    borderRadius: BorderRadius.circular(screenWidth * 0.04),
                                     borderSide: const BorderSide(
                                       color: Color(0xFFFFD700),
                                       width: 2,
                                     ),
                                   ),
                                   disabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(16.0),
+                                    borderRadius: BorderRadius.circular(screenWidth * 0.04),
                                     borderSide: BorderSide(
                                       color: Colors.white.withOpacity(0.1),
                                       width: 1,
                                     ),
                                   ),
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    vertical: 18.0,
-                                    horizontal: 20.0,
+                                  contentPadding: EdgeInsets.symmetric(
+                                    vertical: screenWidth * 0.045,
+                                    horizontal: screenWidth * 0.05,
                                   ),
                                   prefixIcon: Icon(
                                     Icons.tag,
                                     color: Colors.white.withOpacity(0.7),
+                                    size: screenWidth * 0.06,
                                   ),
                                   counterText: '',
                                 ),
                               ),
-
-                              const SizedBox(height: 16),
-
-                              // Join Room Button
+                              SizedBox(height: screenWidth * 0.04),
                               ValueListenableBuilder<TextEditingValue>(
                                 valueListenable: roomCodeController,
                                 builder: (context, value, child) {
                                   final canJoin =
                                       !isWaiting &&
-                                      value.text.trim().length >= 4; 
+                                      value.text.trim().length >= 4;
 
                                   return AnimatedContainer(
                                     duration: const Duration(milliseconds: 200),
                                     width: double.infinity,
-                                    height: 56,
+                                    height: screenWidth * 0.14,
                                     decoration: BoxDecoration(
                                       gradient: LinearGradient(
                                         colors: canJoin
@@ -1085,16 +1050,14 @@ void _listenForOpponent() async {
                                                 Colors.grey.shade600,
                                               ],
                                       ),
-                                      borderRadius: BorderRadius.circular(16),
+                                      borderRadius: BorderRadius.circular(screenWidth * 0.04),
                                       boxShadow: canJoin
                                           ? [
                                               BoxShadow(
-                                                color: Colors.green.withOpacity(
-                                                  0.3,
-                                                ),
-                                                blurRadius: 15,
-                                                spreadRadius: 1,
-                                                offset: const Offset(0, 6),
+                                                color: Colors.green.withOpacity(0.3),
+                                                blurRadius: screenWidth * 0.0375,
+                                                spreadRadius: screenWidth * 0.0025,
+                                                offset: Offset(0, screenWidth * 0.015),
                                               ),
                                             ]
                                           : [],
@@ -1104,9 +1067,7 @@ void _listenForOpponent() async {
                                       child: InkWell(
                                         onTap: canJoin
                                             ? () {
-                                                final code = roomCodeController
-                                                    .text
-                                                    .trim();
+                                                final code = roomCodeController.text.trim();
                                                 if (code.isNotEmpty) {
                                                   joinRoom(code);
                                                 } else {
@@ -1117,19 +1078,19 @@ void _listenForOpponent() async {
                                                 }
                                               }
                                             : null,
-                                        borderRadius: BorderRadius.circular(16),
+                                        borderRadius: BorderRadius.circular(screenWidth * 0.04),
                                         child: Container(
                                           alignment: Alignment.center,
                                           child: isWaiting
-                                              ? const SizedBox(
-                                                  width: 24,
-                                                  height: 24,
-                                                  child: CircularProgressIndicator(
+                                              ? SizedBox(
+                                                  width: screenWidth * 0.06,
+                                                  height: screenWidth * 0.06,
+                                                  child: const CircularProgressIndicator(
                                                     strokeWidth: 2,
                                                     valueColor:
-                                                        AlwaysStoppedAnimation<
-                                                          Color
-                                                        >(Colors.white),
+                                                        AlwaysStoppedAnimation<Color>(
+                                                      Colors.white,
+                                                    ),
                                                   ),
                                                 )
                                               : Row(
@@ -1140,30 +1101,25 @@ void _listenForOpponent() async {
                                                       Icons.login,
                                                       color: canJoin
                                                           ? Colors.white
-                                                          : Colors
-                                                                .grey
-                                                                .shade400,
-                                                      size: 24,
+                                                          : Colors.grey.shade400,
+                                                      size: screenWidth * 0.06,
                                                     ),
-                                                    const SizedBox(width: 12),
+                                                    SizedBox(width: screenWidth * 0.03),
                                                     Text(
                                                       'Join Room',
                                                       style: TextStyle(
-                                                        fontSize: 18,
-                                                        fontWeight:
-                                                            FontWeight.bold,
+                                                        fontSize: screenWidth * 0.045,
+                                                        fontWeight: FontWeight.bold,
                                                         color: canJoin
                                                             ? Colors.white
-                                                            : Colors
-                                                                  .grey
-                                                                  .shade400,
+                                                            : Colors.grey.shade400,
                                                       ),
                                                     ),
                                                   ],
                                                 ),
-                                        ),
                                       ),
                                     ),
+                                  )
                                   );
                                 },
                               ),
@@ -1171,26 +1127,27 @@ void _listenForOpponent() async {
                           ),
                         ),
                       ),
-
                       const Spacer(),
                     ],
                   ),
                 ),
               ),
-
-              // Back button
               Positioned(
-                top: 16,
-                left: 16,
+                top: screenWidth * 0.04,
+                left: screenWidth * 0.04,
                 child: IconButton(
                   onPressed: () => Navigator.pop(context),
                   icon: Container(
-                    padding: const EdgeInsets.all(8),
+                    padding: EdgeInsets.all(screenWidth * 0.02),
                     decoration: BoxDecoration(
                       color: Colors.black.withOpacity(0.3),
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(screenWidth * 0.03),
                     ),
-                    child: const Icon(Icons.arrow_back, color: Colors.white),
+                    child: Icon(
+                      Icons.arrow_back,
+                      color: Colors.white,
+                      size: screenWidth * 0.06,
+                    ),
                   ),
                 ),
               ),
@@ -1206,8 +1163,6 @@ void _listenForOpponent() async {
     if (roomCode != null && isWaiting) {
       return _buildWaitingScreen();
     }
-
-    // Tampilan awal create/join room
     return _buildCreateJoinScreen();
   }
 }

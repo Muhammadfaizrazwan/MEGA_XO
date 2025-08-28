@@ -67,15 +67,16 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   void _handleMusicToggle(bool value) {
-    setState(() {
-      _localMusicState = value;
-    });
-    // Immediately call the parent callback for instant response
+    if (mounted) {
+      setState(() {
+        _localMusicState = value;
+      });
+    }
     widget.onMusicToggle(value);
   }
 
   Future<void> _logout() async {
-    // Show confirmation dialog
+    final screenWidth = MediaQuery.of(context).size.width;
     final shouldLogout = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
@@ -83,9 +84,8 @@ class _ProfileScreenState extends State<ProfileScreen>
         return AlertDialog(
           backgroundColor: const Color(0xFF2A1810),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(screenWidth * 0.04),
             side: BorderSide(
-              // ignore: deprecated_member_use
               color: Colors.orange.withOpacity(0.3),
               width: 1,
             ),
@@ -93,61 +93,74 @@ class _ProfileScreenState extends State<ProfileScreen>
           title: Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(8),
+                padding: EdgeInsets.all(screenWidth * 0.02),
                 decoration: BoxDecoration(
                   color: Colors.red.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(screenWidth * 0.02),
                 ),
-                child: const Icon(Icons.logout, color: Colors.red, size: 24),
+                child: Icon(
+                  Icons.logout,
+                  color: Colors.red,
+                  size: screenWidth * 0.06,
+                ),
               ),
-              const SizedBox(width: 12),
+              SizedBox(width: screenWidth * 0.03),
               Flexible(
-                child: const Text(
+                child: Text(
                   'Logout',
                   style: TextStyle(
                     color: Colors.white,
-                    fontSize: 20,
+                    fontSize: screenWidth * 0.05,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
               ),
             ],
           ),
-          content: const Text(
+          content: Text(
             'Are you sure you want to logout?',
-            style: TextStyle(color: Colors.white70, fontSize: 16),
+            style: TextStyle(
+              color: Colors.white70,
+              fontSize: screenWidth * 0.04,
+            ),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
               style: TextButton.styleFrom(
                 foregroundColor: Colors.grey,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
+                padding: EdgeInsets.symmetric(
+                  horizontal: screenWidth * 0.04,
+                  vertical: screenWidth * 0.02,
                 ),
               ),
-              child: const Text('Cancel'),
+              child: Text(
+                'Cancel',
+                style: TextStyle(fontSize: screenWidth * 0.035),
+              ),
             ),
             Container(
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
                   colors: [Color(0xFFFF6B6B), Color(0xFFE74C3C)],
                 ),
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(screenWidth * 0.02),
               ),
               child: TextButton(
                 onPressed: () => Navigator.of(context).pop(true),
                 style: TextButton.styleFrom(
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: screenWidth * 0.04,
+                    vertical: screenWidth * 0.02,
                   ),
                 ),
-                child: const Text(
+                child: Text(
                   'Logout',
-                  style: TextStyle(fontWeight: FontWeight.w600),
+                  style: TextStyle(
+                    fontSize: screenWidth * 0.035,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ),
@@ -157,12 +170,10 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
 
     if (shouldLogout == true) {
-      // Clear login state from SharedPreferences
       final prefs = await SharedPreferences.getInstance();
       await prefs.clear();
 
       if (mounted) {
-        // Navigate to login screen
         Navigator.pushAndRemoveUntil(
           context,
           PageRouteBuilder(
@@ -170,18 +181,18 @@ class _ProfileScreenState extends State<ProfileScreen>
                 const LoginScreen(),
             transitionsBuilder:
                 (context, animation, secondaryAnimation, child) {
-                  return SlideTransition(
-                    position: animation.drive(
-                      Tween(
-                        begin: const Offset(-1.0, 0.0),
-                        end: Offset.zero,
-                      ).chain(CurveTween(curve: Curves.easeInOut)),
-                    ),
-                    child: child,
-                  );
-                },
+              return SlideTransition(
+                position: animation.drive(
+                  Tween(
+                    begin: const Offset(-1.0, 0.0),
+                    end: Offset.zero,
+                  ).chain(CurveTween(curve: Curves.easeInOut)),
+                ),
+                child: child,
+              );
+            },
           ),
-          (route) => false, // Remove all previous routes
+          (route) => false,
         );
       }
     }
@@ -191,25 +202,25 @@ class _ProfileScreenState extends State<ProfileScreen>
     return LayoutBuilder(
       builder: (context, constraints) {
         final screenWidth = MediaQuery.of(context).size.width;
-        final avatarSize = screenWidth < 360 ? 60.0 : 80.0;
-        final titleFontSize = screenWidth < 360 ? 20.0 : 24.0;
-        final emailFontSize = screenWidth < 360 ? 14.0 : 16.0;
+        final avatarSize = screenWidth < 360 ? screenWidth * 0.167 : screenWidth * 0.2;
+        final titleFontSize = screenWidth < 360 ? screenWidth * 0.055 : screenWidth * 0.06;
+        final emailFontSize = screenWidth < 360 ? screenWidth * 0.038 : screenWidth * 0.04;
 
         return Container(
           width: double.infinity,
-          padding: EdgeInsets.all(screenWidth < 360 ? 16 : 24),
+          padding: EdgeInsets.all(screenWidth * 0.05),
           decoration: BoxDecoration(
             gradient: const LinearGradient(
               colors: [Color(0xFF6A0DAD), Color(0xFF8A2BE2)],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(screenWidth * 0.05),
             boxShadow: [
               BoxShadow(
                 color: Colors.purple.withOpacity(0.3),
-                blurRadius: 15,
-                offset: const Offset(0, 5),
+                blurRadius: screenWidth * 0.04,
+                offset: Offset(0, screenWidth * 0.013),
               ),
             ],
           ),
@@ -227,8 +238,8 @@ class _ProfileScreenState extends State<ProfileScreen>
                   boxShadow: [
                     BoxShadow(
                       color: Colors.orange.withOpacity(0.4),
-                      blurRadius: 15,
-                      spreadRadius: 2,
+                      blurRadius: screenWidth * 0.04,
+                      spreadRadius: screenWidth * 0.005,
                     ),
                   ],
                 ),
@@ -238,7 +249,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                   size: avatarSize * 0.5,
                 ),
               ),
-              SizedBox(height: screenWidth < 360 ? 12 : 16),
+              SizedBox(height: screenWidth * 0.04),
               if (_userName.isNotEmpty)
                 Text(
                   _userName,
@@ -251,7 +262,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
-              SizedBox(height: screenWidth < 360 ? 6 : 8),
+              SizedBox(height: screenWidth * 0.02),
               if (_userEmail.isNotEmpty)
                 Text(
                   _userEmail,
@@ -274,16 +285,16 @@ class _ProfileScreenState extends State<ProfileScreen>
     return LayoutBuilder(
       builder: (context, constraints) {
         final screenWidth = MediaQuery.of(context).size.width;
-        final padding = screenWidth < 360 ? 16.0 : 20.0;
-        final titleFontSize = screenWidth < 360 ? 18.0 : 20.0;
-        final itemFontSize = screenWidth < 360 ? 14.0 : 16.0;
+        final padding = screenWidth * 0.05;
+        final titleFontSize = screenWidth < 360 ? screenWidth * 0.05 : screenWidth * 0.055;
+        final itemFontSize = screenWidth < 360 ? screenWidth * 0.038 : screenWidth * 0.04;
 
         return Container(
           width: double.infinity,
           padding: EdgeInsets.all(padding),
           decoration: BoxDecoration(
             color: Colors.white.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(screenWidth * 0.04),
             border: Border.all(color: Colors.white.withOpacity(0.2), width: 1),
           ),
           child: Column(
@@ -298,15 +309,13 @@ class _ProfileScreenState extends State<ProfileScreen>
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              SizedBox(height: screenWidth < 360 ? 16 : 20),
-
-              // Music Setting
+              SizedBox(height: screenWidth * 0.05),
               Container(
                 width: double.infinity,
-                padding: EdgeInsets.all(screenWidth < 360 ? 12 : 16),
+                padding: EdgeInsets.all(screenWidth * 0.04),
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(screenWidth * 0.03),
                   border: Border.all(
                     color: Colors.white.withOpacity(0.1),
                     width: 1,
@@ -315,20 +324,20 @@ class _ProfileScreenState extends State<ProfileScreen>
                 child: Row(
                   children: [
                     Container(
-                      padding: EdgeInsets.all(screenWidth < 360 ? 8 : 10),
+                      padding: EdgeInsets.all(screenWidth * 0.025),
                       decoration: BoxDecoration(
                         color: _localMusicState
                             ? Colors.green.withOpacity(0.2)
                             : Colors.red.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(screenWidth * 0.025),
                       ),
                       child: Icon(
                         _localMusicState ? Icons.music_note : Icons.music_off,
                         color: _localMusicState ? Colors.green : Colors.red,
-                        size: screenWidth < 360 ? 20 : 24,
+                        size: screenWidth * 0.06,
                       ),
                     ),
-                    SizedBox(width: screenWidth < 360 ? 12 : 16),
+                    SizedBox(width: screenWidth * 0.04),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -346,7 +355,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                             _localMusicState ? 'Music is ON' : 'Music is OFF',
                             style: TextStyle(
                               color: Colors.white.withOpacity(0.7),
-                              fontSize: itemFontSize - 2,
+                              fontSize: itemFontSize * 0.875,
                             ),
                           ),
                         ],
@@ -374,30 +383,30 @@ class _ProfileScreenState extends State<ProfileScreen>
     return LayoutBuilder(
       builder: (context, constraints) {
         final screenWidth = MediaQuery.of(context).size.width;
-        final buttonHeight = screenWidth < 360 ? 50.0 : 60.0;
-        final fontSize = screenWidth < 360 ? 16.0 : 18.0;
-        final iconSize = screenWidth < 360 ? 20.0 : 24.0;
+        final buttonHeight = screenWidth < 360 ? screenWidth * 0.138 : screenWidth * 0.15;
+        final fontSize = screenWidth < 360 ? screenWidth * 0.044 : screenWidth * 0.045;
+        final iconSize = screenWidth < 360 ? screenWidth * 0.055 : screenWidth * 0.06;
 
         return Container(
           width: double.infinity,
           height: buttonHeight,
-          decoration: BoxDecoration(borderRadius: BorderRadius.circular(16)),
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(screenWidth * 0.04)),
           child: Material(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(screenWidth * 0.04),
             child: InkWell(
               onTap: _logout,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(screenWidth * 0.04),
               child: Container(
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
                     colors: [Color(0xFFFF6B6B), Color(0xFFE74C3C)],
                   ),
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(screenWidth * 0.04),
                   boxShadow: [
                     BoxShadow(
                       color: Colors.red.withOpacity(0.3),
-                      blurRadius: 15,
-                      offset: const Offset(0, 5),
+                      blurRadius: screenWidth * 0.04,
+                      offset: Offset(0, screenWidth * 0.013),
                     ),
                   ],
                 ),
@@ -405,7 +414,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(Icons.logout, color: Colors.white, size: iconSize),
-                    const SizedBox(width: 12),
+                    SizedBox(width: screenWidth * 0.03),
                     Text(
                       'Logout',
                       style: TextStyle(
@@ -433,6 +442,7 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
@@ -451,65 +461,53 @@ class _ProfileScreenState extends State<ProfileScreen>
         child: SafeArea(
           child: Column(
             children: [
-              // App Bar
               Padding(
-                padding: const EdgeInsets.all(16),
+                padding: EdgeInsets.all(screenWidth * 0.04),
                 child: Row(
                   children: [
                     GestureDetector(
                       onTap: () => Navigator.pop(context),
-                      child: const Icon(
+                      child: Icon(
                         Icons.arrow_back_ios,
                         color: Colors.white,
-                        size: 24,
+                        size: screenWidth * 0.06,
                       ),
                     ),
-                    const SizedBox(width: 16),
-                    const Text(
+                    SizedBox(width: screenWidth * 0.04),
+                    Text(
                       'Profile',
                       style: TextStyle(
                         color: Colors.white,
-                        fontSize: 24,
+                        fontSize: screenWidth * 0.06,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                   ],
                 ),
               ),
-
-              // Content
               Expanded(
                 child: FadeTransition(
                   opacity: _fadeAnimation,
                   child: SlideTransition(
                     position: _slideAnimation,
                     child: SingleChildScrollView(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      padding: EdgeInsets.symmetric(horizontal: screenWidth * 0.05),
                       child: ConstrainedBox(
                         constraints: BoxConstraints(
                           minHeight:
                               MediaQuery.of(context).size.height -
                               MediaQuery.of(context).padding.top -
                               MediaQuery.of(context).padding.bottom -
-                              120,
+                              (screenWidth * 0.3),
                         ),
                         child: Column(
                           children: [
-                            // Profile Header
                             _buildProfileHeader(),
-                            const SizedBox(height: 30),
-
-                            // Settings Card
+                            SizedBox(height: screenWidth * 0.075),
                             _buildSettingsCard(),
-
-                            // Spacer to push logout button to bottom
-                            SizedBox(
-                              height: MediaQuery.of(context).size.height * 0.1,
-                            ),
-
-                            // Logout Button
+                            SizedBox(height: screenWidth * 0.1),
                             _buildLogoutButton(),
-                            const SizedBox(height: 20),
+                            SizedBox(height: screenWidth * 0.05),
                           ],
                         ),
                       ),

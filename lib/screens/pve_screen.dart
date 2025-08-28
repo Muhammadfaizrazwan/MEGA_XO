@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import '../widgets/ultimate_ttt_board.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:math';
+import '../widgets/ultimate_ttt_board.dart';
 
 class PvEScreen extends StatefulWidget {
   final String difficulty;
@@ -19,17 +19,17 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
   int? activeBigCol;
   bool gameEnded = false;
   String? gameResult;
-  
+
   // Timer variables
   Timer? _gameTimer;
   int _totalSeconds = 0;
   Timer? _turnTimer;
   int _turnSeconds = 30;
-  
+
   // Bot status
   bool _botThinking = false;
   late String botDifficulty;
-  
+
   // Animation controllers
   late AnimationController _turnIndicatorController;
   late AnimationController _timerController;
@@ -262,7 +262,8 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
       color = Colors.red;
     } else {
       title = "🤝 Seri!";
-      message = "Pertarungan sengit melawan Bot ${botDifficulty.toUpperCase()}!";
+      message =
+          "Pertarungan sengit melawan Bot ${botDifficulty.toUpperCase()}!";
       color = Colors.orange;
     }
     showDialog(
@@ -467,95 +468,105 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
     );
   }
 
-  // EASY AI - Random moves with 30% smart plays
+  // EASY AI - Mostly random, low chance to block (no win attempts), sometimes ignores blocks
   Map<String, int>? _getEasyMove() {
     List<Map<String, int>> availableMoves = _getAvailableMoves();
     if (availableMoves.isEmpty) return null;
-    // 30% chance to make a smart move
-    if (Random().nextDouble() < 0.3) {
-      Map<String, int>? smartMove =
-          _findMiniBoardWinMove(availableMoves) ??
-          _findMiniBoardBlockMove(availableMoves);
-      if (smartMove != null) return smartMove;
+    // 10% chance to block a mini-board win for player
+    if (Random().nextDouble() < 0.1) {
+      Map<String, int>? blockMove = _findMiniBoardBlockMove(availableMoves);
+      if (blockMove != null) return blockMove;
+    }
+    // Otherwise, fully random
+    return availableMoves[Random().nextInt(availableMoves.length)];
+  }
+
+  // MEDIUM AI - Basic strategy, improved to include some randomness
+  Map<String, int>? _getMediumMove() {
+    List<Map<String, int>> availableMoves = _getAvailableMoves();
+    if (availableMoves.isEmpty) return null;
+    // Priority: Win big > Block big > Win mini > Block mini > Strategic
+    var move = _findBigBoardWinMove(availableMoves) ??
+        _findBigBoardBlockMove(availableMoves) ??
+        _findMiniBoardWinMove(availableMoves) ??
+        _findMiniBoardBlockMove(availableMoves) ??
+        _findStrategicMove(availableMoves);
+    if (move != null) {
+      // 20% chance to ignore and pick random for some variability
+      if (Random().nextDouble() < 0.2) {
+        return availableMoves[Random().nextInt(availableMoves.length)];
+      }
+      return move;
     }
     return availableMoves[Random().nextInt(availableMoves.length)];
   }
 
-  // MEDIUM AI - Basic strategy
-  Map<String, int>? _getMediumMove() {
-    List<Map<String, int>> availableMoves = _getAvailableMoves();
-    if (availableMoves.isEmpty) return null;
-    // Priority: Win big board > Block big board > Win mini > Block mini > Strategic
-    return _findBigBoardWinMove(availableMoves) ??
-        _findBigBoardBlockMove(availableMoves) ??
-        _findMiniBoardWinMove(availableMoves) ??
-        _findMiniBoardBlockMove(availableMoves) ??
-        _findStrategicMove(availableMoves) ??
-        availableMoves[Random().nextInt(availableMoves.length)];
-  }
-
-  // HARD AI - Minimax with depth 2
+  // HARD AI - Minimax with depth 3 (increased from 2 for better play)
   Map<String, int>? _getHardMove() {
-    List<Map<String, int>> availableMoves = _getAvailableMoves();
-    if (availableMoves.isEmpty) return null;
-    return _minimaxMove(availableMoves, 2);
-  }
-
-  // EXPERT AI - Minimax with depth 3
-  Map<String, int>? _getExpertMove() {
     List<Map<String, int>> availableMoves = _getAvailableMoves();
     if (availableMoves.isEmpty) return null;
     return _minimaxMove(availableMoves, 3);
   }
 
-  // NIGHTMARE AI - Minimax with depth 5 + perfect evaluation + fork detection
+  // EXPERT AI - Minimax with depth 4 (increased for progression)
+  Map<String, int>? _getExpertMove() {
+    List<Map<String, int>> availableMoves = _getAvailableMoves();
+    if (availableMoves.isEmpty) return null;
+    return _minimaxMove(availableMoves, 4);
+  }
+
+  // NIGHTMARE AI - Minimax with depth 6 + heuristics + randomness in ties for unpredictability
   Map<String, int>? _getNightmareMove() {
     List<Map<String, int>> availableMoves = _getAvailableMoves();
     if (availableMoves.isEmpty) return null;
-    
+
     // Opening book - take center of center if available
     if (_totalSeconds < 10) {
       for (var move in availableMoves) {
-        if (move["bigRow"] == 1 && move["bigCol"] == 1 && 
-            move["smallRow"] == 1 && move["smallCol"] == 1) {
+        if (move["bigRow"] == 1 &&
+            move["bigCol"] == 1 &&
+            move["smallRow"] == 1 &&
+            move["smallCol"] == 1) {
           return move;
         }
       }
     }
-    
+
     // Check for immediate win
-    Map<String, int>? winMove = _findBigBoardWinMove(availableMoves) ?? 
-                               _findMiniBoardWinMove(availableMoves);
+    Map<String, int>? winMove =
+        _findBigBoardWinMove(availableMoves) ??
+        _findMiniBoardWinMove(availableMoves);
     if (winMove != null) return winMove;
-    
+
     // Check for immediate block
-    Map<String, int>? blockMove = _findBigBoardBlockMove(availableMoves) ?? 
-                                _findMiniBoardBlockMove(availableMoves);
+    Map<String, int>? blockMove =
+        _findBigBoardBlockMove(availableMoves) ??
+        _findMiniBoardBlockMove(availableMoves);
     if (blockMove != null) return blockMove;
-    
+
     // Check for fork creation
     Map<String, int>? forkMove = _findForkMove(availableMoves);
     if (forkMove != null) return forkMove;
-    
+
     // Check for fork block
     Map<String, int>? blockForkMove = _findBlockForkMove(availableMoves);
     if (blockForkMove != null) return blockForkMove;
-    
-    // Use deep minimax
-    return _minimaxMove(availableMoves, 5);
+
+    // Use deep minimax with randomness in best moves
+    return _minimaxMove(availableMoves, 6, withRandomness: true);
   }
 
   // Find move that creates a fork (two winning threats)
   Map<String, int>? _findForkMove(List<Map<String, int>> moves) {
     for (var move in moves) {
       GameState state = _simulateMove(move, 'O');
-      
+
       // Count winning threats created
       int threats = 0;
-      
+
       // Check big board threats
       threats += _countBigBoardThreats(state.bigBoardStatus, 'O');
-      
+
       // Check mini board threats
       for (int i = 0; i < 3; i++) {
         for (int j = 0; j < 3; j++) {
@@ -564,7 +575,7 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
           }
         }
       }
-      
+
       // If creates at least 2 threats, it's a fork
       if (threats >= 2) {
         return move;
@@ -576,15 +587,16 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
   // Find move that blocks opponent's fork
   Map<String, int>? _findBlockForkMove(List<Map<String, int>> moves) {
     for (var move in moves) {
+      // Simulate opponent playing this move
       GameState state = _simulateMove(move, 'X');
-      
+
       // Count winning threats opponent would have
       int threats = 0;
-      
-      // Check big board threats
+
+      // Check big board threats for opponent
       threats += _countBigBoardThreats(state.bigBoardStatus, 'X');
-      
-      // Check mini board threats
+
+      // Check mini board threats for opponent
       for (int i = 0; i < 3; i++) {
         for (int j = 0; j < 3; j++) {
           if (state.bigBoardStatus[i][j] == '') {
@@ -592,8 +604,8 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
           }
         }
       }
-      
-      // If opponent would have at least 2 threats, block it
+
+      // If opponent would have at least 2 threats, this move blocks it
       if (threats >= 2) {
         return move;
       }
@@ -604,95 +616,117 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
   // Count winning threats in big board
   int _countBigBoardThreats(List<List<String>> bigBoard, String player) {
     int threats = 0;
-    
+
     // Check rows
     for (int i = 0; i < 3; i++) {
       int count = 0;
       bool empty = false;
       for (int j = 0; j < 3; j++) {
-        if (bigBoard[i][j] == player) count++;
-        else if (bigBoard[i][j] == '') empty = true;
+        if (bigBoard[i][j] == player)
+          count++;
+        else if (bigBoard[i][j] == '')
+          empty = true;
       }
       if (count == 2 && empty) threats++;
     }
-    
+
     // Check columns
     for (int j = 0; j < 3; j++) {
       int count = 0;
       bool empty = false;
       for (int i = 0; i < 3; i++) {
-        if (bigBoard[i][j] == player) count++;
-        else if (bigBoard[i][j] == '') empty = true;
+        if (bigBoard[i][j] == player)
+          count++;
+        else if (bigBoard[i][j] == '')
+          empty = true;
       }
       if (count == 2 && empty) threats++;
     }
-    
+
     // Check diagonals
     int diag1Count = 0;
     bool diag1Empty = false;
     int diag2Count = 0;
     bool diag2Empty = false;
-    
+
     for (int i = 0; i < 3; i++) {
-      if (bigBoard[i][i] == player) diag1Count++;
-      else if (bigBoard[i][i] == '') diag1Empty = true;
-      
-      if (bigBoard[i][2-i] == player) diag2Count++;
-      else if (bigBoard[i][2-i] == '') diag2Empty = true;
+      if (bigBoard[i][i] == player)
+        diag1Count++;
+      else if (bigBoard[i][i] == '')
+        diag1Empty = true;
+
+      if (bigBoard[i][2 - i] == player)
+        diag2Count++;
+      else if (bigBoard[i][2 - i] == '')
+        diag2Empty = true;
     }
-    
+
     if (diag1Count == 2 && diag1Empty) threats++;
     if (diag2Count == 2 && diag2Empty) threats++;
-    
+
     return threats;
   }
 
   // Count winning threats in mini board
   int _countMiniBoardThreats(List<String> miniBoard, String player) {
     int threats = 0;
-    
+
     List<List<int>> lines = [
       [0, 1, 2], [3, 4, 5], [6, 7, 8], // rows
       [0, 3, 6], [1, 4, 7], [2, 5, 8], // columns
-      [0, 4, 8], [2, 4, 6]             // diagonals
+      [0, 4, 8], [2, 4, 6], // diagonals
     ];
-    
+
     for (var line in lines) {
       int count = 0;
       bool empty = false;
       for (int pos in line) {
-        if (miniBoard[pos] == player) count++;
-        else if (miniBoard[pos] == '') empty = true;
+        if (miniBoard[pos] == player)
+          count++;
+        else if (miniBoard[pos] == '')
+          empty = true;
       }
       if (count == 2 && empty) threats++;
     }
-    
+
     return threats;
   }
 
-  // Minimax implementation with alpha-beta pruning
-  Map<String, int>? _minimaxMove(List<Map<String, int>> moves, int depth) {
-    Map<String, int>? bestMove;
+  // Minimax implementation with alpha-beta pruning, optional randomness in ties
+  Map<String, int>? _minimaxMove(List<Map<String, int>> moves, int depth, {bool withRandomness = false}) {
+    List<Map<String, int>> bestMoves = [];
     int bestScore = -100000;
-    
+
     // Order moves for better alpha-beta pruning
     List<Map<String, int>> orderedMoves = _orderMoves(moves);
-    
+
     for (var move in orderedMoves) {
       GameState gameState = _simulateMove(move, 'O');
       int score = _minimax(gameState, depth - 1, false, -100000, 100000);
       if (score > bestScore) {
         bestScore = score;
-        bestMove = move;
+        bestMoves = [move];
+      } else if (score == bestScore) {
+        bestMoves.add(move);
       }
     }
-    return bestMove ?? moves[Random().nextInt(moves.length)];
+
+    if (bestMoves.isEmpty) {
+      return moves[Random().nextInt(moves.length)];
+    }
+
+    // If randomness enabled, pick random from best moves
+    if (withRandomness) {
+      return bestMoves[Random().nextInt(bestMoves.length)];
+    }
+
+    return bestMoves.first;
   }
 
-  // Order moves for better alpha-beta pruning - FIXED
+  // Order moves for better alpha-beta pruning
   List<Map<String, int>> _orderMoves(List<Map<String, int>> moves) {
-    List<Map<String, int>> scoredMoves = [];
-    
+    List<Map<String, dynamic>> scoredMoves = [];
+
     for (var move in moves) {
       GameState state = _simulateMove(move, 'O');
       int score = _evaluatePosition(state);
@@ -701,20 +735,24 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
         'bigCol': move['bigCol']!,
         'smallRow': move['smallRow']!,
         'smallCol': move['smallCol']!,
-        'score': score
+        'score': score,
       });
     }
-    
+
     // Sort by score descending
-    scoredMoves.sort((a, b) => b['score']!.compareTo(a['score']!));
-    
+    scoredMoves.sort((a, b) => (b['score'] as int).compareTo(a['score'] as int));
+
     // Return moves without scores
-    return scoredMoves.map((m) => {
-      'bigRow': m['bigRow']!,
-      'bigCol': m['bigCol']!,
-      'smallRow': m['smallRow']!,
-      'smallCol': m['smallCol']!,
-    }).toList();
+    return scoredMoves
+        .map(
+          (m) => {
+            'bigRow': m['bigRow'] as int,
+            'bigCol': m['bigCol'] as int,
+            'smallRow': m['smallRow'] as int,
+            'smallCol': m['smallCol'] as int,
+          },
+        )
+        .toList();
   }
 
   // Minimax algorithm with alpha-beta pruning
@@ -730,13 +768,13 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
     if (winner == 'X') return -10000 - depth;
     if (winner == 'D') return 0;
     if (depth == 0) return _evaluatePosition(state);
-    
+
     List<Map<String, int>> moves = _getAvailableMovesFromState(state);
     if (moves.isEmpty) return 0;
-    
+
     // Order moves for better pruning
     moves = _orderMovesFromState(state, moves, isMaximizing);
-    
+
     if (isMaximizing) {
       int maxEval = -100000;
       for (var move in moves) {
@@ -760,14 +798,14 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
     }
   }
 
-  // Order moves from state for better alpha-beta pruning - FIXED
+  // Order moves from state for better alpha-beta pruning
   List<Map<String, int>> _orderMovesFromState(
-    GameState state, 
-    List<Map<String, int>> moves, 
-    bool isMaximizing
+    GameState state,
+    List<Map<String, int>> moves,
+    bool isMaximizing,
   ) {
-    List<Map<String, int>> scoredMoves = [];
-    
+    List<Map<String, dynamic>> scoredMoves = [];
+
     for (var move in moves) {
       GameState newState = _simulateMove(move, isMaximizing ? 'O' : 'X', state);
       int score = _evaluatePosition(newState);
@@ -776,31 +814,37 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
         'bigCol': move['bigCol']!,
         'smallRow': move['smallRow']!,
         'smallCol': move['smallCol']!,
-        'score': score
+        'score': score,
       });
     }
-    
+
     // Sort by score (descending for maximizing, ascending for minimizing)
-    scoredMoves.sort((a, b) => isMaximizing 
-        ? b['score']!.compareTo(a['score']!) 
-        : a['score']!.compareTo(b['score']!));
-    
+    scoredMoves.sort(
+      (a, b) => isMaximizing
+          ? (b['score'] as int).compareTo(a['score'] as int)
+          : (a['score'] as int).compareTo(b['score'] as int),
+    );
+
     // Return moves without scores
-    return scoredMoves.map((m) => {
-      'bigRow': m['bigRow']!,
-      'bigCol': m['bigCol']!,
-      'smallRow': m['smallRow']!,
-      'smallCol': m['smallCol']!,
-    }).toList();
+    return scoredMoves
+        .map(
+          (m) => {
+            'bigRow': m['bigRow'] as int,
+            'bigCol': m['bigCol'] as int,
+            'smallRow': m['smallRow'] as int,
+            'smallCol': m['smallCol'] as int,
+          },
+        )
+        .toList();
   }
 
   // Enhanced position evaluation
   int _evaluatePosition(GameState state) {
     int score = 0;
-    
+
     // Evaluate big board position with higher weight
     score += _evaluateBigBoard(state.bigBoardStatus) * 20;
-    
+
     // Evaluate mini boards
     for (int i = 0; i < 3; i++) {
       for (int j = 0; j < 3; j++) {
@@ -811,22 +855,22 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
         }
       }
     }
-    
+
     // Evaluate control of active board
     if (state.activeBigRow != null && state.activeBigCol != null) {
       int activeRow = state.activeBigRow!;
       int activeCol = state.activeBigCol!;
-      
+
       if (state.bigBoardStatus[activeRow][activeCol] == 'O') {
         score += 50;
       } else if (state.bigBoardStatus[activeRow][activeCol] == 'X') {
         score -= 50;
       }
     }
-    
+
     // Evaluate winning potential
     score += _evaluateWinningPotential(state);
-    
+
     return score;
   }
 
@@ -834,47 +878,96 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
   int _evaluateBigBoard(List<List<String>> bigBoard) {
     int score = 0;
     List<List<List<int>>> patterns = [
-      [[0, 0], [0, 1], [0, 2]], // rows
-      [[1, 0], [1, 1], [1, 2]],
-      [[2, 0], [2, 1], [2, 2]],
-      [[0, 0], [1, 0], [2, 0]], // columns
-      [[0, 1], [1, 1], [2, 1]],
-      [[0, 2], [1, 2], [2, 2]],
-      [[0, 0], [1, 1], [2, 2]], // diagonals
-      [[0, 2], [1, 1], [2, 0]],
+      [
+        [0, 0],
+        [0, 1],
+        [0, 2],
+      ], // rows
+      [
+        [1, 0],
+        [1, 1],
+        [1, 2],
+      ],
+      [
+        [2, 0],
+        [2, 1],
+        [2, 2],
+      ],
+      [
+        [0, 0],
+        [1, 0],
+        [2, 0],
+      ], // columns
+      [
+        [0, 1],
+        [1, 1],
+        [2, 1],
+      ],
+      [
+        [0, 2],
+        [1, 2],
+        [2, 2],
+      ],
+      [
+        [0, 0],
+        [1, 1],
+        [2, 2],
+      ], // diagonals
+      [
+        [0, 2],
+        [1, 1],
+        [2, 0],
+      ],
     ];
-    
+
     for (var pattern in patterns) {
       int botCount = 0, playerCount = 0;
       for (var pos in pattern) {
         String cell = bigBoard[pos[0]][pos[1]];
-        if (cell == 'O') botCount++;
-        else if (cell == 'X') playerCount++;
+        if (cell == 'O')
+          botCount++;
+        else if (cell == 'X')
+          playerCount++;
       }
-      
+
       // Scoring based on bot and player counts
       if (playerCount == 0) {
-        if (botCount == 3) score += 100;
-        else if (botCount == 2) score += 10;
-        else if (botCount == 1) score += 1;
+        if (botCount == 3)
+          score += 100;
+        else if (botCount == 2)
+          score += 10;
+        else if (botCount == 1)
+          score += 1;
       } else if (botCount == 0) {
-        if (playerCount == 3) score -= 100;
-        else if (playerCount == 2) score -= 10;
-        else if (playerCount == 1) score -= 1;
+        if (playerCount == 3)
+          score -= 100;
+        else if (playerCount == 2)
+          score -= 10;
+        else if (playerCount == 1)
+          score -= 1;
       }
     }
-    
+
     // Center control is very valuable
-    if (bigBoard[1][1] == 'O') score += 40;
-    else if (bigBoard[1][1] == 'X') score -= 40;
-    
+    if (bigBoard[1][1] == 'O')
+      score += 40;
+    else if (bigBoard[1][1] == 'X')
+      score -= 40;
+
     // Corner control
-    List<List<int>> corners = [[0,0], [0,2], [2,0], [2,2]];
+    List<List<int>> corners = [
+      [0, 0],
+      [0, 2],
+      [2, 0],
+      [2, 2],
+    ];
     for (var corner in corners) {
-      if (bigBoard[corner[0]][corner[1]] == 'O') score += 20;
-      else if (bigBoard[corner[0]][corner[1]] == 'X') score -= 20;
+      if (bigBoard[corner[0]][corner[1]] == 'O')
+        score += 20;
+      else if (bigBoard[corner[0]][corner[1]] == 'X')
+        score -= 20;
     }
-    
+
     return score;
   }
 
@@ -886,55 +979,67 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
       [0, 3, 6], [1, 4, 7], [2, 5, 8], // columns
       [0, 4, 8], [2, 4, 6], // diagonals
     ];
-    
+
     for (var pattern in patterns) {
       int botCount = 0, playerCount = 0;
       for (int pos in pattern) {
-        if (miniBoard[pos] == 'O') botCount++;
-        else if (miniBoard[pos] == 'X') playerCount++;
+        if (miniBoard[pos] == 'O')
+          botCount++;
+        else if (miniBoard[pos] == 'X')
+          playerCount++;
       }
-      
+
       if (playerCount == 0) {
-        if (botCount == 2) score += 5;
-        else if (botCount == 1) score += 1;
+        if (botCount == 2)
+          score += 5;
+        else if (botCount == 1)
+          score += 1;
       } else if (botCount == 0) {
-        if (playerCount == 2) score -= 5;
-        else if (playerCount == 1) score -= 1;
+        if (playerCount == 2)
+          score -= 5;
+        else if (playerCount == 1)
+          score -= 1;
       }
     }
-    
+
     // Center position is valuable
-    if (miniBoard[4] == 'O') score += 3;
-    else if (miniBoard[4] == 'X') score -= 3;
-    
+    if (miniBoard[4] == 'O')
+      score += 3;
+    else if (miniBoard[4] == 'X')
+      score -= 3;
+
     // Corner positions
     List<int> corners = [0, 2, 6, 8];
     for (int corner in corners) {
-      if (miniBoard[corner] == 'O') score += 2;
-      else if (miniBoard[corner] == 'X') score -= 2;
+      if (miniBoard[corner] == 'O')
+        score += 2;
+      else if (miniBoard[corner] == 'X')
+        score -= 2;
     }
-    
+
     return score;
   }
 
   // Evaluate winning potential
   int _evaluateWinningPotential(GameState state) {
     int score = 0;
-    
+
     // Count won mini-boards
     int botWins = 0;
     int playerWins = 0;
-    
+
     for (int i = 0; i < 3; i++) {
       for (int j = 0; j < 3; j++) {
-        if (state.bigBoardStatus[i][j] == 'O') botWins++;
-        else if (state.bigBoardStatus[i][j] == 'X') playerWins++;
+        if (state.bigBoardStatus[i][j] == 'O')
+          botWins++;
+        else if (state.bigBoardStatus[i][j] == 'X')
+          playerWins++;
       }
     }
-    
+
     // Score based on win difference
     score += (botWins - playerWins) * 30;
-    
+
     return score;
   }
 
@@ -1144,7 +1249,7 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
   }
 
   Map<String, int>? _findStrategicMove(List<Map<String, int>> moves) {
-    List<Map<String, int>> goodMoves = [];
+    List<Map<String, dynamic>> goodMoves = [];
     for (var move in moves) {
       int score = 0;
       int smallPos = move["smallRow"]! * 3 + move["smallCol"]!;
@@ -1157,12 +1262,12 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
       }
     }
     if (goodMoves.isNotEmpty) {
-      goodMoves.sort((a, b) => b["score"]!.compareTo(a["score"]!));
+      goodMoves.sort((a, b) => (b["score"] as int).compareTo(a["score"] as int));
       return {
-        "bigRow": goodMoves.first["bigRow"]!,
-        "bigCol": goodMoves.first["bigCol"]!,
-        "smallRow": goodMoves.first["smallRow"]!,
-        "smallCol": goodMoves.first["smallCol"]!,
+        "bigRow": goodMoves.first["bigRow"] as int,
+        "bigCol": goodMoves.first["bigCol"] as int,
+        "smallRow": goodMoves.first["smallRow"] as int,
+        "smallCol": goodMoves.first["smallCol"] as int,
       };
     }
     return null;
@@ -1222,9 +1327,15 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
     }
   }
 
-  Widget _buildGameHeader() {
+  Widget _buildGameHeader(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    final screenWidth = MediaQuery.of(context).size.width;
+    
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      padding: EdgeInsets.symmetric(
+        horizontal: screenWidth * 0.04,
+        vertical: screenHeight * 0.02,
+      ),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           colors: [Color(0xFF6A0DAD), Color(0xFF8A2BE2)],
@@ -1245,19 +1356,19 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
             color: Colors.white.withOpacity(0.2),
             borderRadius: BorderRadius.circular(12),
             child: InkWell(
-              onTap: () => _showExitDialog(),
+              onTap: _showExitDialog,
               borderRadius: BorderRadius.circular(12),
               child: Container(
-                padding: const EdgeInsets.all(8),
-                child: const Icon(
+                padding: EdgeInsets.all(screenWidth * 0.02),
+                child: Icon(
                   Icons.arrow_back,
                   color: Colors.white,
-                  size: 24,
+                  size: screenWidth * 0.06,
                 ),
               ),
             ),
           ),
-          const SizedBox(width: 16),
+          SizedBox(width: screenWidth * 0.04),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1267,35 +1378,35 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
                     Icon(
                       Icons.access_time,
                       color: Colors.white.withOpacity(0.8),
-                      size: 16,
+                      size: screenWidth * 0.04,
                     ),
-                    const SizedBox(width: 4),
+                    SizedBox(width: screenWidth * 0.01),
                     Text(
                       'Total: ${_formatTime(_totalSeconds)}',
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: Colors.white70,
-                        fontSize: 12,
+                        fontSize: screenWidth * 0.03,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 4),
+                SizedBox(height: screenHeight * 0.005),
                 Row(
                   children: [
                     Text(
                       'Player vs Bot',
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: Colors.white,
-                        fontSize: 16,
+                        fontSize: screenWidth * 0.04,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    SizedBox(width: screenWidth * 0.02),
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 2,
+                      padding: EdgeInsets.symmetric(
+                        horizontal: screenWidth * 0.02,
+                        vertical: screenHeight * 0.005,
                       ),
                       decoration: BoxDecoration(
                         color: _getDifficultyColor().withOpacity(0.8),
@@ -1303,9 +1414,9 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
                       ),
                       child: Text(
                         botDifficulty.toUpperCase(),
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: Colors.white,
-                          fontSize: 10,
+                          fontSize: screenWidth * 0.025,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -1315,7 +1426,6 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
               ],
             ),
           ),
-          // Restart button
           Material(
             color: Colors.white.withOpacity(0.2),
             borderRadius: BorderRadius.circular(12),
@@ -1323,8 +1433,12 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
               onTap: _showRestartDialog,
               borderRadius: BorderRadius.circular(12),
               child: Container(
-                padding: const EdgeInsets.all(8),
-                child: const Icon(Icons.refresh, color: Colors.white, size: 24),
+                padding: EdgeInsets.all(screenWidth * 0.02),
+                child: Icon(
+                  Icons.refresh,
+                  color: Colors.white,
+                  size: screenWidth * 0.06,
+                ),
               ),
             ),
           ),
@@ -1333,27 +1447,23 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildPlayerCard(
-    String player,
-    String name,
-    bool isBot,
-    bool isActive,
-  ) {
+  Widget _buildPlayerCard(BuildContext context, String player, String name, bool isBot, bool isActive) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    final screenWidth = MediaQuery.of(context).size.width;
+
     return AnimatedBuilder(
       animation: _pulseAnimation,
       builder: (context, child) {
         return Transform.scale(
           scale: isActive && !gameEnded ? _pulseAnimation.value : 1.0,
           child: Container(
-            width: 140,
-            padding: const EdgeInsets.all(16),
+            width: screenWidth * 0.35,
+            padding: EdgeInsets.all(screenWidth * 0.03),
             decoration: BoxDecoration(
               color: const Color(0xFF2D1B69),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: isActive && !gameEnded
-                    ? Colors.white
-                    : Colors.transparent,
+                color: isActive && !gameEnded ? Colors.white : Colors.transparent,
                 width: 2,
               ),
               boxShadow: isActive && !gameEnded
@@ -1373,13 +1483,13 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
                   animation: _botThinkingAnimation,
                   builder: (context, child) {
                     return Container(
-                      width: 60,
-                      height: 60,
+                      width: screenWidth * 0.15,
+                      height: screenWidth * 0.15,
                       decoration: BoxDecoration(
                         color: isBot
                             ? _getDifficultyColor()
                             : const Color(0xFF4ECDC4),
-                        borderRadius: BorderRadius.circular(30),
+                        borderRadius: BorderRadius.circular(screenWidth * 0.075),
                         border: Border.all(color: Colors.white, width: 3),
                       ),
                       child: Stack(
@@ -1388,7 +1498,7 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
                           Icon(
                             isBot ? Icons.psychology : Icons.person,
                             color: Colors.white,
-                            size: 30,
+                            size: screenWidth * 0.075,
                           ),
                           if (isBot && _botThinking)
                             Positioned(
@@ -1411,21 +1521,21 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
                     );
                   },
                 ),
-                const SizedBox(height: 12),
+                SizedBox(height: screenHeight * 0.01),
                 Text(
                   name,
-                  style: const TextStyle(
-                    fontSize: 14,
+                  style: TextStyle(
+                    fontSize: screenWidth * 0.035,
                     fontWeight: FontWeight.w600,
                     color: Colors.white,
                   ),
                 ),
                 if (isBot) ...[
-                  const SizedBox(height: 4),
+                  SizedBox(height: screenHeight * 0.008),
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 2,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: screenWidth * 0.015,
+                      vertical: screenHeight * 0.005,
                     ),
                     decoration: BoxDecoration(
                       color: _getDifficultyColor().withOpacity(0.3),
@@ -1433,8 +1543,8 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
                     ),
                     child: Text(
                       '${botDifficulty.toUpperCase()} AI',
-                      style: const TextStyle(
-                        fontSize: 8,
+                      style: TextStyle(
+                        fontSize: screenWidth * 0.02,
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
                       ),
@@ -1442,31 +1552,31 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
                   ),
                 ],
                 if (isBot && _botThinking) ...[
-                  const SizedBox(height: 4),
+                  SizedBox(height: screenHeight * 0.008),
                   Text(
                     'Analyzing...',
                     style: TextStyle(
-                      fontSize: 10,
+                      fontSize: screenWidth * 0.025,
                       fontWeight: FontWeight.w400,
                       color: Colors.yellow[300],
                     ),
                   ),
                 ],
-                const SizedBox(height: 8),
+                SizedBox(height: screenHeight * 0.008),
                 Container(
-                  width: 30,
-                  height: 30,
+                  width: screenWidth * 0.075,
+                  height: screenWidth * 0.075,
                   decoration: BoxDecoration(
                     color: player == "X"
                         ? Colors.red.withOpacity(0.2)
                         : Colors.green.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(15),
+                    borderRadius: BorderRadius.circular(screenWidth * 0.0375),
                   ),
                   child: Center(
                     child: Text(
                       player,
                       style: TextStyle(
-                        fontSize: 18,
+                        fontSize: screenWidth * 0.045,
                         fontWeight: FontWeight.w900,
                         color: player == "X" ? Colors.red : Colors.green,
                       ),
@@ -1481,35 +1591,34 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildTurnIndicator() {
+  Widget _buildTurnIndicator(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    final screenWidth = MediaQuery.of(context).size.width;
+
     return AnimatedBuilder(
       animation: _turnIndicatorAnimation,
       builder: (context, child) {
         return Transform.scale(
           scale: _turnIndicatorAnimation.value,
           child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            margin: EdgeInsets.symmetric(
+              horizontal: screenWidth * 0.05,
+              vertical: screenHeight * 0.015,
+            ),
             child: Column(
               children: [
-                // Player Cards
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    _buildPlayerCard("X", "You", false, currentPlayer == "X"),
-                    _buildPlayerCard(
-                      "O",
-                      "${botDifficulty.toUpperCase()} Bot",
-                      true,
-                      currentPlayer == "O",
-                    ),
+                    _buildPlayerCard(context, "X", "You", false, currentPlayer == "X"),
+                    _buildPlayerCard(context, "O", "${botDifficulty.toUpperCase()} Bot", true, currentPlayer == "O"),
                   ],
                 ),
-                const SizedBox(height: 16),
-                // Game Status and Timer
+                SizedBox(height: screenHeight * 0.02),
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 12,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: screenWidth * 0.05,
+                    vertical: screenHeight * 0.015,
                   ),
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.1),
@@ -1528,30 +1637,30 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
                             Text(
                               gameEnded
                                   ? (gameResult == "X"
-                                        ? "🎉 You Win!"
-                                        : gameResult == "O"
-                                        ? "😔 Bot Wins!"
-                                        : "🤝 Draw!")
+                                      ? "🎉 You Win!"
+                                      : gameResult == "O"
+                                      ? "😔 Bot Wins!"
+                                      : "🤝 Draw!")
                                   : _botThinking
                                   ? "Bot is analyzing..."
                                   : currentPlayer == "X"
                                   ? "Your Turn"
                                   : "Bot's Turn",
-                              style: const TextStyle(
-                                fontSize: 16,
+                              style: TextStyle(
+                                fontSize: screenWidth * 0.04,
                                 fontWeight: FontWeight.w600,
                                 color: Colors.white,
                               ),
                             ),
-                            const SizedBox(height: 2),
+                            SizedBox(height: screenHeight * 0.005),
                             Text(
                               gameEnded
                                   ? 'Game sudah berakhir'
                                   : activeBigRow != null && activeBigCol != null
                                   ? 'Must play in board ${activeBigRow! + 1}-${activeBigCol! + 1}'
                                   : 'Free to choose any board',
-                              style: const TextStyle(
-                                fontSize: 12,
+                              style: TextStyle(
+                                fontSize: screenWidth * 0.03,
                                 fontWeight: FontWeight.w400,
                                 color: Colors.white70,
                               ),
@@ -1559,7 +1668,6 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
                           ],
                         ),
                       ),
-                      // Turn Timer (only for player)
                       if (currentPlayer == "X" && !_botThinking && !gameEnded)
                         AnimatedBuilder(
                           animation: _timerWarningAnimation,
@@ -1569,9 +1677,9 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
                                   ? _timerWarningAnimation.value
                                   : 1.0,
                               child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 8,
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: screenWidth * 0.03,
+                                  vertical: screenHeight * 0.01,
                                 ),
                                 decoration: BoxDecoration(
                                   color: _turnSeconds <= 10
@@ -1584,16 +1692,16 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
                                   children: [
                                     Icon(
                                       Icons.timer,
-                                      size: 16,
+                                      size: screenWidth * 0.04,
                                       color: _turnSeconds <= 10
                                           ? Colors.white
                                           : Colors.white70,
                                     ),
-                                    const SizedBox(width: 4),
+                                    SizedBox(width: screenWidth * 0.01),
                                     Text(
                                       '$_turnSeconds',
                                       style: TextStyle(
-                                        fontSize: 14,
+                                        fontSize: screenWidth * 0.035,
                                         fontWeight: FontWeight.w700,
                                         color: _turnSeconds <= 10
                                             ? Colors.white
@@ -1671,17 +1779,17 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
             borderRadius: BorderRadius.circular(16),
           ),
           title: const Text(
-            'Keluar dari Game?',
+            'Quit the Game?',
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
           ),
           content: const Text(
-            'Progress game akan hilang. Yakin ingin kembali ke menu utama?',
+            'Game progress will be lost. Are you sure you want to return to the main menu?',
             style: TextStyle(color: Colors.white70),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: Text('Batal', style: TextStyle(color: Colors.grey[300])),
+              child: Text('Cancel', style: TextStyle(color: Colors.grey[300])),
             ),
             ElevatedButton(
               onPressed: () {
@@ -1695,7 +1803,7 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
                   borderRadius: BorderRadius.circular(8),
                 ),
               ),
-              child: const Text('Keluar'),
+              child: const Text('Exit'),
             ),
           ],
         );
@@ -1716,6 +1824,9 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    final screenWidth = MediaQuery.of(context).size.width;
+
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: PreferredSize(
@@ -1733,27 +1844,39 @@ class _PvEScreenState extends State<PvEScreen> with TickerProviderStateMixin {
         child: SafeArea(
           child: Column(
             children: [
-              _buildGameHeader(),
-              _buildTurnIndicator(),
+              _buildGameHeader(context),
+              _buildTurnIndicator(context),
               Expanded(
-                child: Container(
-                  margin: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: Colors.white.withOpacity(0.2),
-                      width: 1,
-                    ),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(20),
-                    child: UltimateTTTBoard(
-                      board: board,
-                      onMove: _handleMove,
-                      activeBigRow: activeBigRow,
-                      activeBigCol: activeBigCol,
-                      bigBoardStatus: bigBoardStatus,
+                child: Center(
+                  child: AspectRatio(
+                    aspectRatio: 1.0, // Keeps the board square
+                    child: Container(
+                      margin: EdgeInsets.all(screenWidth * 0.05),
+                      constraints: BoxConstraints(
+                        maxWidth: screenWidth * 0.9,
+                        maxHeight: screenHeight * 0.6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.2),
+                          width: 1,
+                        ),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(20),
+                        child: Padding(
+                          padding: EdgeInsets.all(screenWidth * 0.02),
+                          child: UltimateTTTBoard(
+                            board: board,
+                            onMove: _handleMove,
+                            activeBigRow: activeBigRow,
+                            activeBigCol: activeBigCol,
+                            bigBoardStatus: bigBoardStatus,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -1772,14 +1895,14 @@ class GameState {
   List<List<String>> bigBoardStatus;
   int? activeBigRow;
   int? activeBigCol;
-  
+
   GameState(
     this.board,
     this.bigBoardStatus,
     this.activeBigRow,
     this.activeBigCol,
   );
-  
+
   factory GameState.fromCurrent(
     List<List<List<String>>> currentBoard,
     List<List<String>> currentBigBoard,

@@ -12,24 +12,19 @@ class PvPScreen extends StatefulWidget {
 class _PvPScreenState extends State<PvPScreen> with TickerProviderStateMixin {
   late List<List<List<String>>> board;
   late List<List<String>> bigBoardStatus;
-
   String currentPlayer = "X";
   int? activeBigRow;
   int? activeBigCol;
-
   Timer? _gameTimer;
   int _totalSeconds = 0;
   Timer? _turnTimer;
   int _turnSeconds = 30;
-
   late AnimationController _turnIndicatorController;
   late AnimationController _timerController;
   late AnimationController _pulseController;
-
   late Animation<double> _turnIndicatorAnimation;
   late Animation<double> _timerWarningAnimation;
   late Animation<double> _pulseAnimation;
-
   bool _gameEnded = false;
   String? _gameResult;
 
@@ -48,7 +43,6 @@ class _PvPScreenState extends State<PvPScreen> with TickerProviderStateMixin {
       (_) => List.generate(3, (_) => List.generate(9, (_) => "")),
     );
     bigBoardStatus = List.generate(3, (_) => List.generate(3, (_) => ""));
-
     activeBigRow = null;
     activeBigCol = null;
     currentPlayer = "X";
@@ -85,22 +79,18 @@ class _PvPScreenState extends State<PvPScreen> with TickerProviderStateMixin {
       duration: const Duration(milliseconds: 1000),
       vsync: this,
     );
-
     _turnIndicatorAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _turnIndicatorController,
         curve: Curves.elasticOut,
       ),
     );
-
     _timerWarningAnimation = Tween<double>(begin: 1.0, end: 1.2).animate(
       CurvedAnimation(parent: _timerController, curve: Curves.easeInOut),
     );
-
     _pulseAnimation = Tween<double>(begin: 1.0, end: 1.1).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
-
     _turnIndicatorController.forward();
     _pulseController.repeat(reverse: true);
   }
@@ -145,7 +135,6 @@ class _PvPScreenState extends State<PvPScreen> with TickerProviderStateMixin {
     }
   }
 
-  // ✅ FIXED: Cek kemenangan di papan kecil
   bool checkWin(List<String> boardSection, String player) {
     List<List<int>> wins = [
       [0, 1, 2], [3, 4, 5], [6, 7, 8], // baris
@@ -162,29 +151,23 @@ class _PvPScreenState extends State<PvPScreen> with TickerProviderStateMixin {
     return false;
   }
 
-  // ✅ NEW: Cek apakah papan kecil seri/draw
   bool checkDraw(List<String> boardSection) {
-    // Papan penuh tapi tidak ada yang menang
     return boardSection.every((cell) => cell.isNotEmpty) && 
            !checkWin(boardSection, "X") && 
            !checkWin(boardSection, "O");
   }
 
-  // ✅ FIXED: Cek kemenangan di papan besar (dengan handling draw)
   bool checkBigBoardWin(List<List<String>> bigBoard, String player) {
     for (int i = 0; i < 3; i++) {
-      // baris
       if (bigBoard[i][0] == player &&
           bigBoard[i][1] == player &&
           bigBoard[i][2] == player)
         return true;
-      // kolom
       if (bigBoard[0][i] == player &&
           bigBoard[1][i] == player &&
           bigBoard[2][i] == player)
         return true;
     }
-    // diagonal
     if (bigBoard[0][0] == player &&
         bigBoard[1][1] == player &&
         bigBoard[2][2] == player)
@@ -193,7 +176,6 @@ class _PvPScreenState extends State<PvPScreen> with TickerProviderStateMixin {
         bigBoard[1][1] == player &&
         bigBoard[2][0] == player)
       return true;
-
     return false;
   }
 
@@ -284,7 +266,6 @@ class _PvPScreenState extends State<PvPScreen> with TickerProviderStateMixin {
     );
   }
 
-  // ✅ FIXED: Handle move dengan logic draw yang benar
   void _handleMove(int bigRow, int bigCol, int smallRow, int smallCol) {
     if (_gameEnded) return;
     
@@ -293,23 +274,17 @@ class _PvPScreenState extends State<PvPScreen> with TickerProviderStateMixin {
     if (activeBigRow != null && activeBigCol != null) {
       if (bigRow != activeBigRow || bigCol != activeBigCol) return;
     }
-
     setState(() {
       board[bigRow][bigCol][smallRow * 3 + smallCol] = currentPlayer;
-
-      // ✅ FIXED: Cek kemenangan DAN draw di papan kecil
+      
       if (checkWin(board[bigRow][bigCol], currentPlayer)) {
-        // Pemain menang di papan kecil
         bigBoardStatus[bigRow][bigCol] = currentPlayer;
         board[bigRow][bigCol] = List.generate(9, (_) => currentPlayer);
       } else if (checkDraw(board[bigRow][bigCol])) {
-        // ✅ NEW: Papan kecil seri/draw
-        bigBoardStatus[bigRow][bigCol] = "D"; // D untuk Draw
-        // Tampilkan visual draw di papan kecil
+        bigBoardStatus[bigRow][bigCol] = "D";
         board[bigRow][bigCol] = List.generate(9, (_) => "D");
       }
-
-      // Cek kemenangan papan besar
+      
       if (checkBigBoardWin(bigBoardStatus, currentPlayer)) {
         String winner = currentPlayer == "X" ? "Player 1" : "Player 2";
         _showGameOverDialog('🎉 $winner Menang! 🎉');
@@ -317,27 +292,22 @@ class _PvPScreenState extends State<PvPScreen> with TickerProviderStateMixin {
         _gameTimer?.cancel();
         return;
       } else if (bigBoardStatus.expand((e) => e).every((c) => c.isNotEmpty)) {
-        // ✅ FIXED: Cek seri di papan besar (termasuk yang ada "D")
         _showGameOverDialog('🤝 Permainan Seri! 🤝');
         _turnTimer?.cancel();
         _gameTimer?.cancel();
         return;
       }
-
-      // Tentukan papan aktif untuk lawan 
+      
       activeBigRow = smallRow;
       activeBigCol = smallCol;
-
-      // ✅ FIXED: Jika papan aktif sudah dimenangi, draw, atau penuh
+      
       if (bigBoardStatus[activeBigRow!][activeBigCol!].isNotEmpty ||
           board[activeBigRow!][activeBigCol!].every((c) => c.isNotEmpty)) {
         activeBigRow = null;
         activeBigCol = null;
       }
-
       currentPlayer = currentPlayer == "X" ? "O" : "X";
     });
-
     _startTurnTimer();
     _turnIndicatorController.reset();
     _turnIndicatorController.forward();
@@ -350,9 +320,15 @@ class _PvPScreenState extends State<PvPScreen> with TickerProviderStateMixin {
     return '${minutes.toString().padLeft(2, '0')}:${remainingSeconds.toString().padLeft(2, '0')}';
   }
 
-  Widget _buildGameHeader() {
+  Widget _buildGameHeader(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    final screenWidth = MediaQuery.of(context).size.width;
+    
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      padding: EdgeInsets.symmetric(
+        horizontal: screenWidth * 0.04, 
+        vertical: screenHeight * 0.02
+      ),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           colors: [Color(0xFF6A0DAD), Color(0xFF8A2BE2)],
@@ -376,16 +352,16 @@ class _PvPScreenState extends State<PvPScreen> with TickerProviderStateMixin {
               onTap: _showExitDialog,
               borderRadius: BorderRadius.circular(12),
               child: Container(
-                padding: const EdgeInsets.all(8),
-                child: const Icon(
+                padding: EdgeInsets.all(screenWidth * 0.02),
+                child: Icon(
                   Icons.arrow_back,
                   color: Colors.white,
-                  size: 24,
+                  size: screenWidth * 0.06,
                 ),
               ),
             ),
           ),
-          const SizedBox(width: 16),
+          SizedBox(width: screenWidth * 0.04),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -395,25 +371,25 @@ class _PvPScreenState extends State<PvPScreen> with TickerProviderStateMixin {
                     Icon(
                       Icons.access_time,
                       color: Colors.white.withOpacity(0.8),
-                      size: 16,
+                      size: screenWidth * 0.04,
                     ),
-                    const SizedBox(width: 4),
+                    SizedBox(width: screenWidth * 0.01),
                     Text(
                       'Total: ${_formatTime(_totalSeconds)}',
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: Colors.white70,
-                        fontSize: 12,
+                        fontSize: screenWidth * 0.03,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 4),
-                const Text(
+                SizedBox(height: screenHeight * 0.005),
+                Text(
                   'Player vs Player',
                   style: TextStyle(
                     color: Colors.white,
-                    fontSize: 16,
+                    fontSize: screenWidth * 0.04,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -427,11 +403,11 @@ class _PvPScreenState extends State<PvPScreen> with TickerProviderStateMixin {
               onTap: _showRestartDialog,
               borderRadius: BorderRadius.circular(12),
               child: Container(
-                padding: const EdgeInsets.all(8),
-                child: const Icon(
+                padding: EdgeInsets.all(screenWidth * 0.02),
+                child: Icon(
                   Icons.refresh,
                   color: Colors.white,
-                  size: 24,
+                  size: screenWidth * 0.06,
                 ),
               ),
             ),
@@ -441,15 +417,18 @@ class _PvPScreenState extends State<PvPScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildPlayerCard(String player, String name, bool isActive) {
+  Widget _buildPlayerCard(BuildContext context, String player, String name, bool isActive) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    final screenWidth = MediaQuery.of(context).size.width;
+    
     return AnimatedBuilder(
       animation: _pulseAnimation,
       builder: (context, child) {
         return Transform.scale(
           scale: isActive && !_gameEnded ? _pulseAnimation.value : 1.0,
           child: Container(
-            width: 140,
-            padding: const EdgeInsets.all(16),
+            width: screenWidth * 0.35,
+            padding: EdgeInsets.all(screenWidth * 0.03),
             decoration: BoxDecoration(
               color: const Color(0xFF2D1B69),
               borderRadius: BorderRadius.circular(16),
@@ -471,45 +450,45 @@ class _PvPScreenState extends State<PvPScreen> with TickerProviderStateMixin {
             child: Column(
               children: [
                 Container(
-                  width: 60,
-                  height: 60,
+                  width: screenWidth * 0.15,
+                  height: screenWidth * 0.15,
                   decoration: BoxDecoration(
                     color: const Color(0xFF4ECDC4),
-                    borderRadius: BorderRadius.circular(30),
+                    borderRadius: BorderRadius.circular(screenWidth * 0.075),
                     border: Border.all(color: Colors.white, width: 3),
                   ),
                   child: Center(
                     child: Icon(
                       player == "X" ? Icons.person : Icons.person_outline,
                       color: Colors.white,
-                      size: 30,
+                      size: screenWidth * 0.075,
                     ),
                   ),
                 ),
-                const SizedBox(height: 12),
+                SizedBox(height: screenHeight * 0.01),
                 Text(
                   name,
-                  style: const TextStyle(
-                    fontSize: 14,
+                  style: TextStyle(
+                    fontSize: screenWidth * 0.035,
                     fontWeight: FontWeight.w600,
                     color: Colors.white,
                   ),
                 ),
-                const SizedBox(height: 8),
+                SizedBox(height: screenHeight * 0.008),
                 Container(
-                  width: 30,
-                  height: 30,
+                  width: screenWidth * 0.075,
+                  height: screenWidth * 0.075,
                   decoration: BoxDecoration(
                     color: player == "X"
                         ? Colors.red.withOpacity(0.2)
                         : Colors.green.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(15),
+                    borderRadius: BorderRadius.circular(screenWidth * 0.0375),
                   ),
                   child: Center(
                     child: Text(
                       player,
                       style: TextStyle(
-                        fontSize: 18,
+                        fontSize: screenWidth * 0.045,
                         fontWeight: FontWeight.w900,
                         color: player == "X" ? Colors.red : Colors.green,
                       ),
@@ -524,28 +503,34 @@ class _PvPScreenState extends State<PvPScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildTurnIndicator() {
+  Widget _buildTurnIndicator(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    final screenWidth = MediaQuery.of(context).size.width;
+    
     return AnimatedBuilder(
       animation: _turnIndicatorAnimation,
       builder: (context, child) {
         return Transform.scale(
           scale: _turnIndicatorAnimation.value,
           child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            margin: EdgeInsets.symmetric(
+              horizontal: screenWidth * 0.05, 
+              vertical: screenHeight * 0.015
+            ),
             child: Column(
               children: [
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    _buildPlayerCard("X", "Player 1", currentPlayer == "X"),
-                    _buildPlayerCard("O", "Player 2", currentPlayer == "O"),
+                    _buildPlayerCard(context, "X", "Player 1", currentPlayer == "X"),
+                    _buildPlayerCard(context, "O", "Player 2", currentPlayer == "O"),
                   ],
                 ),
-                const SizedBox(height: 16),
+                SizedBox(height: screenHeight * 0.02),
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 12,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: screenWidth * 0.05,
+                    vertical: screenHeight * 0.015,
                   ),
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.1),
@@ -567,21 +552,21 @@ class _PvPScreenState extends State<PvPScreen> with TickerProviderStateMixin {
                                   : (currentPlayer == "X"
                                       ? "Player 1's Turn"
                                       : "Player 2's Turn"),
-                              style: const TextStyle(
-                                fontSize: 16,
+                              style: TextStyle(
+                                fontSize: screenWidth * 0.04,
                                 fontWeight: FontWeight.w600,
                                 color: Colors.white,
                               ),
                             ),
-                            const SizedBox(height: 2),
+                            SizedBox(height: screenHeight * 0.005),
                             Text(
                               _gameEnded 
                                   ? 'Game sudah berakhir'
                                   : (activeBigRow != null && activeBigCol != null
                                       ? 'Must play in board ${activeBigRow! + 1}-${activeBigCol! + 1}'
                                       : 'Free to choose any board'),
-                              style: const TextStyle(
-                                fontSize: 12,
+                              style: TextStyle(
+                                fontSize: screenWidth * 0.03,
                                 fontWeight: FontWeight.w400,
                                 color: Colors.white70,
                               ),
@@ -598,9 +583,9 @@ class _PvPScreenState extends State<PvPScreen> with TickerProviderStateMixin {
                                   ? _timerWarningAnimation.value
                                   : 1.0,
                               child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 8,
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: screenWidth * 0.03,
+                                  vertical: screenHeight * 0.01,
                                 ),
                                 decoration: BoxDecoration(
                                   color: _turnSeconds <= 10
@@ -613,16 +598,16 @@ class _PvPScreenState extends State<PvPScreen> with TickerProviderStateMixin {
                                   children: [
                                     Icon(
                                       Icons.timer,
-                                      size: 16,
+                                      size: screenWidth * 0.04,
                                       color: _turnSeconds <= 10
                                           ? Colors.white
                                           : Colors.white70,
                                     ),
-                                    const SizedBox(width: 4),
+                                    SizedBox(width: screenWidth * 0.01),
                                     Text(
                                       '$_turnSeconds',
                                       style: TextStyle(
-                                        fontSize: 14,
+                                        fontSize: screenWidth * 0.035,
                                         fontWeight: FontWeight.w700,
                                         color: _turnSeconds <= 10
                                             ? Colors.white
@@ -744,6 +729,9 @@ class _PvPScreenState extends State<PvPScreen> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    final screenWidth = MediaQuery.of(context).size.width;
+    
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: PreferredSize(
@@ -761,27 +749,41 @@ class _PvPScreenState extends State<PvPScreen> with TickerProviderStateMixin {
         child: SafeArea(
           child: Column(
             children: [
-              _buildGameHeader(),
-              _buildTurnIndicator(),
+              _buildGameHeader(context),
+              _buildTurnIndicator(context),
               Expanded(
-                child: Container(
-                  margin: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: Colors.white.withOpacity(0.2),
-                      width: 1,
-                    ),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(20),
-                    child: UltimateTTTBoard(
-                      board: board,
-                      onMove: _handleMove,
-                      activeBigRow: activeBigRow,
-                      activeBigCol: activeBigCol,
-                      bigBoardStatus: bigBoardStatus,
+                child: Center(
+                  child: AspectRatio(
+                    aspectRatio: 1.0, // Keeps the board square
+                    child: Container(
+                      margin: EdgeInsets.all(screenWidth * 0.05),
+                      constraints: BoxConstraints(
+                        maxWidth: screenWidth * 0.9,
+                        maxHeight: screenHeight * 0.6, // Increased for better board size
+                      ),
+                      decoration: BoxDecoration(
+                        // ignore: deprecated_member_use
+                        color: Colors.white.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          // ignore: deprecated_member_use
+                          color: Colors.white.withOpacity(0.2),
+                          width: 1,
+                        ),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(20),
+                        child: Padding(
+                          padding: EdgeInsets.all(screenWidth * 0.02), // Add some padding inside
+                          child: UltimateTTTBoard(
+                            board: board,
+                            onMove: _handleMove,
+                            activeBigRow: activeBigRow,
+                            activeBigCol: activeBigCol,
+                            bigBoardStatus: bigBoardStatus,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),

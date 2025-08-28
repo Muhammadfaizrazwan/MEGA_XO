@@ -55,7 +55,6 @@ class _DifficultySelectionScreenState extends State<DifficultySelectionScreen>
       CurvedAnimation(parent: _titleController, curve: Curves.elasticOut),
     );
 
-    // Start animations
     _backgroundController.repeat();
     _titleController.forward();
     Future.delayed(const Duration(milliseconds: 300), () {
@@ -71,7 +70,7 @@ class _DifficultySelectionScreenState extends State<DifficultySelectionScreen>
     super.dispose();
   }
 
-  Widget _buildAnimatedBackground() {
+  Widget _buildAnimatedBackground(BuildContext context) {
     return AnimatedBuilder(
       animation: _backgroundAnimation,
       builder: (context, child) {
@@ -85,33 +84,37 @@ class _DifficultySelectionScreenState extends State<DifficultySelectionScreen>
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
     return AnimatedBuilder(
       animation: _titleAnimation,
       builder: (context, child) {
         return Transform.scale(
           scale: _titleAnimation.value,
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            padding: EdgeInsets.symmetric(
+              horizontal: screenWidth * 0.05, // 5% of screen width
+              vertical: screenWidth * 0.04, // 4% of screen width
+            ),
             child: Row(
               children: [
                 Material(
                   color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(screenWidth * 0.03),
                   child: InkWell(
                     onTap: () => Navigator.of(context).pop(),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(screenWidth * 0.03),
                     child: Container(
-                      padding: const EdgeInsets.all(8),
-                      child: const Icon(
+                      padding: EdgeInsets.all(screenWidth * 0.02),
+                      child: Icon(
                         Icons.arrow_back,
                         color: Colors.white,
-                        size: 24,
+                        size: screenWidth * 0.06, // 6% of screen width
                       ),
                     ),
                   ),
                 ),
-                const SizedBox(width: 16),
+                SizedBox(width: screenWidth * 0.04),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -120,20 +123,20 @@ class _DifficultySelectionScreenState extends State<DifficultySelectionScreen>
                         shaderCallback: (bounds) => const LinearGradient(
                           colors: [Color(0xFFFFD700), Color(0xFFFFA500)],
                         ).createShader(bounds),
-                        child: const Text(
+                        child: Text(
                           'Select Difficulty',
                           style: TextStyle(
-                            fontSize: 24,
+                            fontSize: screenWidth * 0.06, // Responsive font size
                             fontWeight: FontWeight.w900,
                             color: Colors.white,
                             letterSpacing: 1,
                           ),
                         ),
                       ),
-                      const Text(
+                      Text(
                         'Choose your challenge level',
                         style: TextStyle(
-                          fontSize: 14,
+                          fontSize: screenWidth * 0.035,
                           color: Colors.white70,
                           fontWeight: FontWeight.w500,
                         ),
@@ -162,211 +165,218 @@ class _DifficultySelectionScreenState extends State<DifficultySelectionScreen>
     required int index,
     bool isSpecial = false,
   }) {
-    return AnimatedBuilder(
-      animation: _cardController,
-      builder: (context, child) {
-        return Transform.translate(
-          offset: Offset(0, _cardSlideAnimation.value * (index + 1) * 0.5),
-          child: Opacity(
-            opacity: _cardFadeAnimation.value,
-            child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-              child: Material(
-                elevation: isSpecial ? 20 : 12,
-                borderRadius: BorderRadius.circular(20),
-                shadowColor: color.withOpacity(0.5),
-                child: InkWell(
-                  onTap: () => _startGame(difficulty),
-                  borderRadius: BorderRadius.circular(20),
-                  splashColor: Colors.white.withOpacity(0.3),
-                  highlightColor: Colors.white.withOpacity(0.1),
-                  child: Container(
-                    height: 120,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: isSpecial 
-                          ? [
-                              color.withOpacity(0.9),
-                              accentColor.withOpacity(0.8),
-                              Colors.black.withOpacity(0.9),
-                            ]
-                          : [
-                              color.withOpacity(0.9),
-                              accentColor.withOpacity(0.8),
-                            ],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: isSpecial 
-                          ? Colors.white.withOpacity(0.5)
-                          : Colors.white.withOpacity(0.2),
-                        width: isSpecial ? 2 : 1,
-                      ),
-                      boxShadow: isSpecial ? [
-                        BoxShadow(
-                          color: color.withOpacity(0.4),
-                          blurRadius: 25,
-                          spreadRadius: 3,
-                          offset: const Offset(0, 8),
-                        ),
-                        BoxShadow(
-                          color: Colors.white.withOpacity(0.1),
-                          blurRadius: 15,
-                          spreadRadius: 1,
-                          offset: const Offset(0, 4),
-                        ),
-                      ] : [
-                        BoxShadow(
-                          color: color.withOpacity(0.3),
-                          blurRadius: 15,
-                          offset: const Offset(0, 5),
-                        ),
-                      ],
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(20),
-                      child: Row(
-                        children: [
-                          // Icon Section
-                          Container(
-                            width: 60,
-                            height: 60,
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(15),
-                              border: Border.all(
-                                color: Colors.white.withOpacity(0.3),
-                                width: 1,
-                              ),
-                            ),
-                            child: Icon(
-                              icon,
-                              color: Colors.white,
-                              size: 30,
-                            ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final screenWidth = MediaQuery.of(context).size.width;
+        final cardHeight = screenWidth * 0.3; // 30% of screen width for card height
+        return AnimatedBuilder(
+          animation: _cardController,
+          builder: (context, child) {
+            return Transform.translate(
+              offset: Offset(0, _cardSlideAnimation.value * (index + 1) * 0.5),
+              child: Opacity(
+                opacity: _cardFadeAnimation.value,
+                child: Container(
+                  margin: EdgeInsets.symmetric(
+                    horizontal: screenWidth * 0.05,
+                    vertical: screenWidth * 0.02,
+                  ),
+                  child: Material(
+                    elevation: isSpecial ? 20 : 12,
+                    borderRadius: BorderRadius.circular(screenWidth * 0.05),
+                    shadowColor: color.withOpacity(0.5),
+                    child: InkWell(
+                      onTap: () => _startGame(difficulty),
+                      borderRadius: BorderRadius.circular(screenWidth * 0.05),
+                      splashColor: Colors.white.withOpacity(0.3),
+                      highlightColor: Colors.white.withOpacity(0.1),
+                      child: Container(
+                        height: cardHeight,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: isSpecial 
+                              ? [
+                                  color.withOpacity(0.9),
+                                  accentColor.withOpacity(0.8),
+                                  Colors.black.withOpacity(0.9),
+                                ]
+                              : [
+                                  color.withOpacity(0.9),
+                                  accentColor.withOpacity(0.8),
+                                ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
                           ),
-                          const SizedBox(width: 16),
-                          
-                          // Content Section
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Row(
-                                  children: [
-                                    Text(
-                                      title,
-                                      style: const TextStyle(
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.w800,
-                                        color: Colors.white,
-                                        letterSpacing: 0.5,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    if (isSpecial)
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 6,
-                                          vertical: 2,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: Colors.red.withOpacity(0.8),
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                        child: const Text(
-                                          'SPECIAL',
-                                          style: TextStyle(
-                                            fontSize: 8,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.white,
-                                          ),
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  subtitle,
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w500,
-                                    color: Colors.white70,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  description,
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w400,
-                                    color: Colors.white60,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ],
-                            ),
+                          borderRadius: BorderRadius.circular(screenWidth * 0.05),
+                          border: Border.all(
+                            color: isSpecial 
+                              ? Colors.white.withOpacity(0.5)
+                              : Colors.white.withOpacity(0.2),
+                            width: isSpecial ? 2 : 1,
                           ),
-                          
-                          // Stats Section
-                          Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.end,
+                          boxShadow: isSpecial ? [
+                            BoxShadow(
+                              color: color.withOpacity(0.4),
+                              blurRadius: screenWidth * 0.06,
+                              spreadRadius: screenWidth * 0.008,
+                              offset: Offset(0, screenWidth * 0.02),
+                            ),
+                            BoxShadow(
+                              color: Colors.white.withOpacity(0.1),
+                              blurRadius: screenWidth * 0.04,
+                              spreadRadius: screenWidth * 0.003,
+                              offset: Offset(0, screenWidth * 0.01),
+                            ),
+                          ] : [
+                            BoxShadow(
+                              color: color.withOpacity(0.3),
+                              blurRadius: screenWidth * 0.04,
+                              offset: Offset(0, screenWidth * 0.013),
+                            ),
+                          ],
+                        ),
+                        child: Padding(
+                          padding: EdgeInsets.all(screenWidth * 0.05),
+                          child: Row(
                             children: [
-                              // Star Rating
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: List.generate(5, (starIndex) {
-                                  return Icon(
-                                    starIndex < stars ? Icons.star : Icons.star_border,
-                                    color: starIndex < stars 
-                                      ? Colors.amber 
-                                      : Colors.white.withOpacity(0.3),
-                                    size: 16,
-                                  );
-                                }),
-                              ),
-                              const SizedBox(height: 4),
-                              // Win Rate
+                              // Icon Section
                               Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 4,
-                                ),
+                                width: screenWidth * 0.15,
+                                height: screenWidth * 0.15,
                                 decoration: BoxDecoration(
                                   color: Colors.white.withOpacity(0.2),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Text(
-                                  'Win: $winRate',
-                                  style: const TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.white,
+                                  borderRadius: BorderRadius.circular(screenWidth * 0.04),
+                                  border: Border.all(
+                                    color: Colors.white.withOpacity(0.3),
+                                    width: 1,
                                   ),
                                 ),
+                                child: Icon(
+                                  icon,
+                                  color: Colors.white,
+                                  size: screenWidth * 0.08,
+                                ),
+                              ),
+                              SizedBox(width: screenWidth * 0.04),
+                              
+                              // Content Section
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Text(
+                                          title,
+                                          style: TextStyle(
+                                            fontSize: screenWidth * 0.05,
+                                            fontWeight: FontWeight.w800,
+                                            color: Colors.white,
+                                            letterSpacing: 0.5,
+                                          ),
+                                        ),
+                                        SizedBox(width: screenWidth * 0.02),
+                                        if (isSpecial)
+                                          Container(
+                                            padding: EdgeInsets.symmetric(
+                                              horizontal: screenWidth * 0.015,
+                                              vertical: screenWidth * 0.005,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: Colors.red.withOpacity(0.8),
+                                              borderRadius: BorderRadius.circular(screenWidth * 0.02),
+                                            ),
+                                            child: Text(
+                                              'SPECIAL',
+                                              style: TextStyle(
+                                                fontSize: screenWidth * 0.02,
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                    SizedBox(height: screenWidth * 0.005),
+                                    Text(
+                                      subtitle,
+                                      style: TextStyle(
+                                        fontSize: screenWidth * 0.03,
+                                        fontWeight: FontWeight.w500,
+                                        color: Colors.white70,
+                                      ),
+                                    ),
+                                    SizedBox(height: screenWidth * 0.01),
+                                    Text(
+                                      description,
+                                      style: TextStyle(
+                                        fontSize: screenWidth * 0.028,
+                                        fontWeight: FontWeight.w400,
+                                        color: Colors.white60,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              
+                              // Stats Section
+                              Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: List.generate(5, (starIndex) {
+                                      return Icon(
+                                        starIndex < stars ? Icons.star : Icons.star_border,
+                                        color: starIndex < stars 
+                                          ? Colors.amber 
+                                          : Colors.white.withOpacity(0.3),
+                                        size: screenWidth * 0.04,
+                                      );
+                                    }),
+                                  ),
+                                  SizedBox(height: screenWidth * 0.01),
+                                  Container(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: screenWidth * 0.02,
+                                      vertical: screenWidth * 0.01,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(screenWidth * 0.03),
+                                    ),
+                                    child: Text(
+                                      'Win: $winRate',
+                                      style: TextStyle(
+                                        fontSize: screenWidth * 0.025,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
-                        ],
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ),
+            );
+          },
         );
       },
     );
   }
 
   void _startGame(String difficulty) {
-    // Show loading animation
+    final screenWidth = MediaQuery.of(context).size.width;
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -374,10 +384,10 @@ class _DifficultySelectionScreenState extends State<DifficultySelectionScreen>
         return Dialog(
           backgroundColor: Colors.transparent,
           child: Container(
-            padding: const EdgeInsets.all(20),
+            padding: EdgeInsets.all(screenWidth * 0.05),
             decoration: BoxDecoration(
               color: const Color(0xFF2D1B69),
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(screenWidth * 0.04),
               border: Border.all(
                 color: Colors.white.withOpacity(0.2),
                 width: 1,
@@ -386,24 +396,25 @@ class _DifficultySelectionScreenState extends State<DifficultySelectionScreen>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const CircularProgressIndicator(
+                CircularProgressIndicator(
                   valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  strokeWidth: screenWidth * 0.01,
                 ),
-                const SizedBox(height: 16),
+                SizedBox(height: screenWidth * 0.04),
                 Text(
                   'Preparing ${difficulty.toUpperCase()} Bot...',
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: Colors.white,
-                    fontSize: 16,
+                    fontSize: screenWidth * 0.04,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                const SizedBox(height: 8),
-                const Text(
+                SizedBox(height: screenWidth * 0.02),
+                Text(
                   'Get ready for the challenge!',
                   style: TextStyle(
                     color: Colors.white70,
-                    fontSize: 12,
+                    fontSize: screenWidth * 0.03,
                   ),
                 ),
               ],
@@ -413,9 +424,8 @@ class _DifficultySelectionScreenState extends State<DifficultySelectionScreen>
       },
     );
 
-    // Navigate to game after delay
     Future.delayed(const Duration(milliseconds: 2000), () {
-      Navigator.of(context).pop(); // Close loading dialog
+      Navigator.of(context).pop();
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -427,6 +437,7 @@ class _DifficultySelectionScreenState extends State<DifficultySelectionScreen>
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
@@ -444,22 +455,17 @@ class _DifficultySelectionScreenState extends State<DifficultySelectionScreen>
         ),
         child: Stack(
           children: [
-            // Animated background
-            _buildAnimatedBackground(),
-            
-            // Main content
+            _buildAnimatedBackground(context),
             SafeArea(
               child: Column(
                 children: [
-                  _buildHeader(),
+                  _buildHeader(context),
                   Expanded(
                     child: SingleChildScrollView(
-                      padding: const EdgeInsets.only(bottom: 20),
+                      padding: EdgeInsets.only(bottom: screenWidth * 0.05),
                       child: Column(
                         children: [
-                          const SizedBox(height: 20),
-                          
-                          // Easy
+                          SizedBox(height: screenWidth * 0.05),
                           _buildDifficultyCard(
                             title: 'EASY',
                             subtitle: 'Perfect for beginners',
@@ -472,8 +478,6 @@ class _DifficultySelectionScreenState extends State<DifficultySelectionScreen>
                             icon: Icons.sentiment_very_satisfied,
                             index: 0,
                           ),
-                          
-                          // Medium
                           _buildDifficultyCard(
                             title: 'MEDIUM',
                             subtitle: 'Balanced challenge',
@@ -486,8 +490,6 @@ class _DifficultySelectionScreenState extends State<DifficultySelectionScreen>
                             icon: Icons.sentiment_satisfied,
                             index: 1,
                           ),
-                          
-                          // Hard
                           _buildDifficultyCard(
                             title: 'HARD',
                             subtitle: 'Advanced AI',
@@ -500,8 +502,6 @@ class _DifficultySelectionScreenState extends State<DifficultySelectionScreen>
                             icon: Icons.sentiment_neutral,
                             index: 2,
                           ),
-                          
-                          // Expert
                           _buildDifficultyCard(
                             title: 'EXPERT',
                             subtitle: 'Master level',
@@ -514,8 +514,6 @@ class _DifficultySelectionScreenState extends State<DifficultySelectionScreen>
                             icon: Icons.sentiment_dissatisfied,
                             index: 3,
                           ),
-                          
-                          // Nightmare
                           _buildDifficultyCard(
                             title: 'NIGHTMARE',
                             subtitle: 'Nearly impossible',
@@ -527,28 +525,24 @@ class _DifficultySelectionScreenState extends State<DifficultySelectionScreen>
                             difficulty: 'nightmare',
                             icon: Icons.sentiment_very_dissatisfied,
                             index: 4,
-                            isSpecial: true,
                           ),
-                          
-                          const SizedBox(height: 20),
-                          
-                          // Info text
+                          SizedBox(height: screenWidth * 0.05),
                           Container(
-                            margin: const EdgeInsets.symmetric(horizontal: 20),
-                            padding: const EdgeInsets.all(16),
+                            margin: EdgeInsets.symmetric(horizontal: screenWidth * 0.05),
+                            padding: EdgeInsets.all(screenWidth * 0.04),
                             decoration: BoxDecoration(
                               color: Colors.white.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: BorderRadius.circular(screenWidth * 0.03),
                               border: Border.all(
                                 color: Colors.white.withOpacity(0.2),
                                 width: 1,
                               ),
                             ),
-                            child: const Text(
+                            child: Text(
                               '💡 Tip: Start with Easy mode to learn the game mechanics, then gradually increase difficulty as you improve!',
                               style: TextStyle(
                                 color: Colors.white70,
-                                fontSize: 12,
+                                fontSize: screenWidth * 0.03,
                                 fontWeight: FontWeight.w500,
                               ),
                               textAlign: TextAlign.center,
@@ -583,8 +577,8 @@ class DifficultyBackgroundPainter extends CustomPainter {
     
     for (double x = 0; x <= size.width; x += 1) {
       double y = size.height * 0.8 + 
-                 25 * sin((x / size.width * 6 * pi) + animation * 2 * pi) +
-                 15 * sin((x / size.width * 10 * pi) + animation * 3 * pi);
+                 (size.height * 0.05) * sin((x / size.width * 6 * pi) + animation * 2 * pi) +
+                 (size.height * 0.03) * sin((x / size.width * 10 * pi) + animation * 3 * pi);
       path.lineTo(x, y);
     }
     
@@ -611,7 +605,7 @@ class DifficultyBackgroundPainter extends CustomPainter {
       double opacity = (sin(animation * 2 * pi + i) + 1) / 2 * 0.15;
       
       paint.color = Colors.white.withOpacity(opacity);
-      canvas.drawCircle(Offset(x, y), 3, paint);
+      canvas.drawCircle(Offset(x, y), size.width * 0.008, paint);
     }
 
     // Grid overlay
@@ -619,7 +613,7 @@ class DifficultyBackgroundPainter extends CustomPainter {
     paint.strokeWidth = 1;
     paint.style = PaintingStyle.stroke;
     
-    double gridSize = 60;
+    double gridSize = size.width * 0.15; // Responsive grid size
     for (double x = 0; x < size.width; x += gridSize) {
       canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
     }
