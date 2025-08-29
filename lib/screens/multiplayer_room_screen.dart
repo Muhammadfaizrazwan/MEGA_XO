@@ -69,7 +69,8 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
       final userInfo = await pbService.getUserInfo();
       if (mounted) {
         setState(() {
-          userDisplayName = userInfo['name'] ?? userInfo['email'] ?? "Unknown User";
+          userDisplayName =
+              userInfo['name'] ?? userInfo['email'] ?? "Unknown User";
         });
       }
 
@@ -168,27 +169,30 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
       final emptyBigBoard = List.filled(9, '');
 
       final pb = await pbService.pb;
-      final room = await pb.collection('rooms').create(
-        body: {
-          'roomCode': code,
-          'playerX': pbService.userId,
-          'playerXName': pbService.username ?? userDisplayName,
-          'playerO': null,
-          'playerOName': null,
-          'status': 'waiting',
-          'smallBoards': jsonEncode(emptySmallBoards),
-          'bigBoard': jsonEncode(emptyBigBoard),
-          'currentTurn': 'X',
-          'activeBoard': -1,
-          'createdBy': pbService.userId,
-          'playerXInRoom': true,
-          'playerOInRoom': false,
-          'playerXLastSeen': DateTime.now().toIso8601String(),
-          'playerOLastSeen': null,
-          'playerXLeftAt': null,
-          'playerOLeftAt': null,
-        },
-      );
+      final room = await pb
+          .collection('rooms')
+          .create(
+            body: {
+              'roomCode': code,
+              'playerX': pbService.userId,
+              'playerXName': pbService.username ?? userDisplayName,
+              'playerO': null,
+              'playerOName': null,
+              'status': 'waiting',
+              'smallBoards': jsonEncode(emptySmallBoards),
+              'bigBoard': jsonEncode(emptyBigBoard),
+              'currentTurn': 'X',
+              'activeBoard': -1,
+              'createdBy': pbService.userId,
+              'playerXInRoom': true,
+              'playerOInRoom': false,
+              'playerXLastSeen': DateTime.now().toIso8601String(),
+              'playerOLastSeen': null,
+              'playerXLeftAt': null,
+              'playerOLeftAt': null,
+              'gameRound': 1,
+            },
+          );
 
       roomCode = code;
       roomId = room.id;
@@ -206,7 +210,10 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
       setState(() {
         isWaiting = false;
       });
-      _showMessage("Gagal membuat room: ${e.toString().replaceFirst('Exception: ', '')}", isError: true);
+      _showMessage(
+        "Gagal membuat room: ${e.toString().replaceFirst('Exception: ', '')}",
+        isError: true,
+      );
     }
   }
 
@@ -226,11 +233,11 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
           final r = e.record;
           print("Room updated: ${r?.data}");
 
-          if (r?.data['playerO'] != null && 
-              r?.data['playerO'] != '' && 
+          if (r?.data['playerO'] != null &&
+              r?.data['playerO'] != '' &&
               !_hasNavigated) {
             print("Opponent joined! PlayerO: ${r?.data['playerOName']}");
-            
+
             _hasNavigated = true;
 
             pb.collection('rooms').unsubscribe(roomId!);
@@ -244,16 +251,16 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
                         MultiplayerGameScreen(roomId: roomId!, isPlayerX: true),
                     transitionsBuilder:
                         (context, animation, secondaryAnimation, child) {
-                      return SlideTransition(
-                        position: animation.drive(
-                          Tween(
-                            begin: const Offset(1.0, 0.0),
-                            end: Offset.zero,
-                          ).chain(CurveTween(curve: Curves.easeInOut)),
-                        ),
-                        child: child,
-                      );
-                    },
+                          return SlideTransition(
+                            position: animation.drive(
+                              Tween(
+                                begin: const Offset(1.0, 0.0),
+                                end: Offset.zero,
+                              ).chain(CurveTween(curve: Curves.easeInOut)),
+                            ),
+                            child: child,
+                          );
+                        },
                   ),
                 );
               }
@@ -292,15 +299,21 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
       print("Filter query: $filterQuery");
 
       final pb = await pbService.pb;
-      final rooms = await pb.collection('rooms').getList(filter: filterQuery, perPage: 1);
+      final rooms = await pb
+          .collection('rooms')
+          .getList(filter: filterQuery, perPage: 1);
 
       print("Rooms found: ${rooms.items.length}");
 
       if (rooms.items.isEmpty) {
-        print("No waiting rooms found, checking for any rooms with this code...");
+        print(
+          "No waiting rooms found, checking for any rooms with this code...",
+        );
 
         final allRoomsQuery = "roomCode='$code'";
-        final allRooms = await pb.collection('rooms').getList(filter: allRoomsQuery, perPage: 1);
+        final allRooms = await pb
+            .collection('rooms')
+            .getList(filter: allRoomsQuery, perPage: 1);
 
         if (allRooms.items.isEmpty) {
           throw Exception("Room dengan kode $code tidak ditemukan");
@@ -315,7 +328,9 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
             case 'finished':
               throw Exception("Room sudah selesai");
             default:
-              throw Exception("Room tidak dalam status waiting (status: $status)");
+              throw Exception(
+                "Room tidak dalam status waiting (status: $status)",
+              );
           }
         }
       }
@@ -334,17 +349,19 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
 
       print("Joining room: ${room.id}");
 
-      await pb.collection('rooms').update(
-        room.id,
-        body: {
-          'playerO': pbService.userId,
-          'playerOName': pbService.username ?? userDisplayName,
-          'status': 'playing',
-          'playerOInRoom': true,
-          'playerOLastSeen': DateTime.now().toIso8601String(),
-          'playerOLeftAt': null,
-        },
-      );
+      await pb
+          .collection('rooms')
+          .update(
+            room.id,
+            body: {
+              'playerO': pbService.userId,
+              'playerOName': pbService.username ?? userDisplayName,
+              'status': 'playing',
+              'playerOInRoom': true,
+              'playerOLastSeen': DateTime.now().toIso8601String(),
+              'playerOLeftAt': null,
+            },
+          );
 
       print("Successfully joined room");
       print("- playerOInRoom: true");
@@ -358,16 +375,16 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
                 MultiplayerGameScreen(roomId: room.id, isPlayerX: false),
             transitionsBuilder:
                 (context, animation, secondaryAnimation, child) {
-              return SlideTransition(
-                position: animation.drive(
-                  Tween(
-                    begin: const Offset(1.0, 0.0),
-                    end: Offset.zero,
-                  ).chain(CurveTween(curve: Curves.easeInOut)),
-                ),
-                child: child,
-              );
-            },
+                  return SlideTransition(
+                    position: animation.drive(
+                      Tween(
+                        begin: const Offset(1.0, 0.0),
+                        end: Offset.zero,
+                      ).chain(CurveTween(curve: Curves.easeInOut)),
+                    ),
+                    child: child,
+                  );
+                },
           ),
         );
       }
@@ -418,16 +435,15 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
             ),
             SizedBox(width: screenWidth * 0.02),
             Expanded(
-              child: Text(
-                msg,
-                style: TextStyle(fontSize: screenWidth * 0.04),
-              ),
+              child: Text(msg, style: TextStyle(fontSize: screenWidth * 0.04)),
             ),
           ],
         ),
         backgroundColor: isError ? Colors.red[600] : Colors.green[600],
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(screenWidth * 0.025)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(screenWidth * 0.025),
+        ),
         margin: EdgeInsets.all(screenWidth * 0.04),
       ),
     );
@@ -473,7 +489,9 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
         return Stack(
           children: [
             Positioned(
-              top: screenHeight * 0.125 + (screenHeight * 0.025 * sin(_rotationAnimation.value)),
+              top:
+                  screenHeight * 0.125 +
+                  (screenHeight * 0.025 * sin(_rotationAnimation.value)),
               left: screenWidth * 0.1,
               child: Transform.rotate(
                 angle: _rotationAnimation.value,
@@ -485,7 +503,9 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
               ),
             ),
             Positioned(
-              top: screenHeight * 0.25 - (screenHeight * 0.01875 * cos(_rotationAnimation.value)),
+              top:
+                  screenHeight * 0.25 -
+                  (screenHeight * 0.01875 * cos(_rotationAnimation.value)),
               right: screenWidth * 0.125,
               child: Transform.rotate(
                 angle: -_rotationAnimation.value * 0.8,
@@ -497,7 +517,11 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
               ),
             ),
             Positioned(
-              bottom: screenHeight * 0.3125 + (screenHeight * 0.03125 * sin(_rotationAnimation.value * 0.6)),
+              bottom:
+                  screenHeight * 0.3125 +
+                  (screenHeight *
+                      0.03125 *
+                      sin(_rotationAnimation.value * 0.6)),
               left: screenWidth * 0.075,
               child: Transform.rotate(
                 angle: _rotationAnimation.value * 1.5,
@@ -509,7 +533,9 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
               ),
             ),
             Positioned(
-              bottom: screenHeight * 0.4375 - (screenHeight * 0.025 * cos(_rotationAnimation.value * 1.2)),
+              bottom:
+                  screenHeight * 0.4375 -
+                  (screenHeight * 0.025 * cos(_rotationAnimation.value * 1.2)),
               right: screenWidth * 0.1,
               child: Transform.rotate(
                 angle: -_rotationAnimation.value * 0.5,
@@ -583,7 +609,9 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
                                         Color(0xFFFFA500),
                                       ],
                                     ),
-                                    borderRadius: BorderRadius.circular(screenWidth * 0.05),
+                                    borderRadius: BorderRadius.circular(
+                                      screenWidth * 0.05,
+                                    ),
                                     boxShadow: [
                                       BoxShadow(
                                         color: Colors.orange.withOpacity(0.4),
@@ -629,7 +657,9 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
                               gradient: const LinearGradient(
                                 colors: [Color(0xFF6A0DAD), Color(0xFF8A2BE2)],
                               ),
-                              borderRadius: BorderRadius.circular(screenWidth * 0.04),
+                              borderRadius: BorderRadius.circular(
+                                screenWidth * 0.04,
+                              ),
                               boxShadow: [
                                 BoxShadow(
                                   color: Colors.deepPurple.withOpacity(0.4),
@@ -702,7 +732,9 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
                                 border: Border.all(
                                   color: Colors.white.withOpacity(0.3),
                                 ),
-                                borderRadius: BorderRadius.circular(screenWidth * 0.03),
+                                borderRadius: BorderRadius.circular(
+                                  screenWidth * 0.03,
+                                ),
                               ),
                               child: Text(
                                 'Cancel',
@@ -787,7 +819,9 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
                                       Color(0xFFFFA500),
                                     ],
                                   ),
-                                  borderRadius: BorderRadius.circular(screenWidth * 0.05),
+                                  borderRadius: BorderRadius.circular(
+                                    screenWidth * 0.05,
+                                  ),
                                   boxShadow: [
                                     BoxShadow(
                                       color: Colors.orange.withOpacity(0.4),
@@ -828,7 +862,9 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
                                 ),
                                 decoration: BoxDecoration(
                                   color: Colors.black.withOpacity(0.3),
-                                  borderRadius: BorderRadius.circular(screenWidth * 0.03),
+                                  borderRadius: BorderRadius.circular(
+                                    screenWidth * 0.03,
+                                  ),
                                 ),
                                 child: Text(
                                   "Welcome, $userDisplayName",
@@ -850,7 +886,9 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
                           padding: EdgeInsets.all(screenWidth * 0.08),
                           decoration: BoxDecoration(
                             color: Colors.black.withOpacity(0.3),
-                            borderRadius: BorderRadius.circular(screenWidth * 0.06),
+                            borderRadius: BorderRadius.circular(
+                              screenWidth * 0.06,
+                            ),
                             border: Border.all(
                               color: Colors.white.withOpacity(0.1),
                               width: 1,
@@ -877,7 +915,9 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
                                       Color(0xFF8A2BE2),
                                     ],
                                   ),
-                                  borderRadius: BorderRadius.circular(screenWidth * 0.04),
+                                  borderRadius: BorderRadius.circular(
+                                    screenWidth * 0.04,
+                                  ),
                                   boxShadow: [
                                     BoxShadow(
                                       color: Colors.deepPurple.withOpacity(0.4),
@@ -891,20 +931,23 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
                                   color: Colors.transparent,
                                   child: InkWell(
                                     onTap: isWaiting ? null : createRoom,
-                                    borderRadius: BorderRadius.circular(screenWidth * 0.04),
+                                    borderRadius: BorderRadius.circular(
+                                      screenWidth * 0.04,
+                                    ),
                                     child: Container(
                                       alignment: Alignment.center,
                                       child: isWaiting
                                           ? SizedBox(
                                               width: screenWidth * 0.06,
                                               height: screenWidth * 0.06,
-                                              child: const CircularProgressIndicator(
-                                                strokeWidth: 2,
-                                                valueColor:
-                                                    AlwaysStoppedAnimation<Color>(
-                                                  Colors.white,
-                                                ),
-                                              ),
+                                              child:
+                                                  const CircularProgressIndicator(
+                                                    strokeWidth: 2,
+                                                    valueColor:
+                                                        AlwaysStoppedAnimation<
+                                                          Color
+                                                        >(Colors.white),
+                                                  ),
                                             )
                                           : Row(
                                               mainAxisAlignment:
@@ -915,11 +958,14 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
                                                   color: Colors.white,
                                                   size: screenWidth * 0.06,
                                                 ),
-                                                SizedBox(width: screenWidth * 0.03),
+                                                SizedBox(
+                                                  width: screenWidth * 0.03,
+                                                ),
                                                 Text(
                                                   'Create Room',
                                                   style: TextStyle(
-                                                    fontSize: screenWidth * 0.045,
+                                                    fontSize:
+                                                        screenWidth * 0.045,
                                                     fontWeight: FontWeight.bold,
                                                     color: Colors.white,
                                                   ),
@@ -987,28 +1033,36 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
                                   filled: true,
                                   fillColor: Colors.white.withOpacity(0.1),
                                   border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(screenWidth * 0.04),
+                                    borderRadius: BorderRadius.circular(
+                                      screenWidth * 0.04,
+                                    ),
                                     borderSide: BorderSide(
                                       color: Colors.white.withOpacity(0.2),
                                       width: 1,
                                     ),
                                   ),
                                   enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(screenWidth * 0.04),
+                                    borderRadius: BorderRadius.circular(
+                                      screenWidth * 0.04,
+                                    ),
                                     borderSide: BorderSide(
                                       color: Colors.white.withOpacity(0.2),
                                       width: 1,
                                     ),
                                   ),
                                   focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(screenWidth * 0.04),
+                                    borderRadius: BorderRadius.circular(
+                                      screenWidth * 0.04,
+                                    ),
                                     borderSide: const BorderSide(
                                       color: Color(0xFFFFD700),
                                       width: 2,
                                     ),
                                   ),
                                   disabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(screenWidth * 0.04),
+                                    borderRadius: BorderRadius.circular(
+                                      screenWidth * 0.04,
+                                    ),
                                     borderSide: BorderSide(
                                       color: Colors.white.withOpacity(0.1),
                                       width: 1,
@@ -1050,14 +1104,23 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
                                                 Colors.grey.shade600,
                                               ],
                                       ),
-                                      borderRadius: BorderRadius.circular(screenWidth * 0.04),
+                                      borderRadius: BorderRadius.circular(
+                                        screenWidth * 0.04,
+                                      ),
                                       boxShadow: canJoin
                                           ? [
                                               BoxShadow(
-                                                color: Colors.green.withOpacity(0.3),
-                                                blurRadius: screenWidth * 0.0375,
-                                                spreadRadius: screenWidth * 0.0025,
-                                                offset: Offset(0, screenWidth * 0.015),
+                                                color: Colors.green.withOpacity(
+                                                  0.3,
+                                                ),
+                                                blurRadius:
+                                                    screenWidth * 0.0375,
+                                                spreadRadius:
+                                                    screenWidth * 0.0025,
+                                                offset: Offset(
+                                                  0,
+                                                  screenWidth * 0.015,
+                                                ),
                                               ),
                                             ]
                                           : [],
@@ -1067,7 +1130,9 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
                                       child: InkWell(
                                         onTap: canJoin
                                             ? () {
-                                                final code = roomCodeController.text.trim();
+                                                final code = roomCodeController
+                                                    .text
+                                                    .trim();
                                                 if (code.isNotEmpty) {
                                                   joinRoom(code);
                                                 } else {
@@ -1078,7 +1143,9 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
                                                 }
                                               }
                                             : null,
-                                        borderRadius: BorderRadius.circular(screenWidth * 0.04),
+                                        borderRadius: BorderRadius.circular(
+                                          screenWidth * 0.04,
+                                        ),
                                         child: Container(
                                           alignment: Alignment.center,
                                           child: isWaiting
@@ -1088,9 +1155,9 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
                                                   child: const CircularProgressIndicator(
                                                     strokeWidth: 2,
                                                     valueColor:
-                                                        AlwaysStoppedAnimation<Color>(
-                                                      Colors.white,
-                                                    ),
+                                                        AlwaysStoppedAnimation<
+                                                          Color
+                                                        >(Colors.white),
                                                   ),
                                                 )
                                               : Row(
@@ -1101,25 +1168,33 @@ class _MultiplayerRoomScreenState extends State<MultiplayerRoomScreen>
                                                       Icons.login,
                                                       color: canJoin
                                                           ? Colors.white
-                                                          : Colors.grey.shade400,
+                                                          : Colors
+                                                                .grey
+                                                                .shade400,
                                                       size: screenWidth * 0.06,
                                                     ),
-                                                    SizedBox(width: screenWidth * 0.03),
+                                                    SizedBox(
+                                                      width: screenWidth * 0.03,
+                                                    ),
                                                     Text(
                                                       'Join Room',
                                                       style: TextStyle(
-                                                        fontSize: screenWidth * 0.045,
-                                                        fontWeight: FontWeight.bold,
+                                                        fontSize:
+                                                            screenWidth * 0.045,
+                                                        fontWeight:
+                                                            FontWeight.bold,
                                                         color: canJoin
                                                             ? Colors.white
-                                                            : Colors.grey.shade400,
+                                                            : Colors
+                                                                  .grey
+                                                                  .shade400,
                                                       ),
                                                     ),
                                                   ],
                                                 ),
+                                        ),
                                       ),
                                     ),
-                                  )
                                   );
                                 },
                               ),
