@@ -1,13 +1,14 @@
+import 'dart:math';
+
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:math';
-import 'pvp_screen.dart';
+
 import 'difficulty_selection_screen.dart';
 import 'multiplayer_room_screen.dart';
-import 'rules_screen.dart';
-import 'login_screen.dart';
 import 'profile_screen.dart';
-import 'package:audioplayers/audioplayers.dart';
+import 'pvp_screen.dart';
+import 'rules_screen.dart';
 
 // Background Music Class
 class BackgroundMusic {
